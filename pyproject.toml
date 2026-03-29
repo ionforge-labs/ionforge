@@ -9,7 +9,7 @@ description = "Open-source charged particle optics toolkit"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "IonForge Contributors" }]
+authors = [{ name = "Jacob Cable" }]
 keywords = [
     "charged particle optics",
     "BEM",

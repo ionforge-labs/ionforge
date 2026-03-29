@@ -96,11 +96,20 @@ def _load_ascii_stl(
     for line in lines:
         line = line.strip()
         if line.startswith("vertex"):
-            coords = [float(x) for x in line.split()[1:4]]
+            parts = line.split()
+            if len(parts) < 4:
+                raise ValueError(f"Malformed vertex line in STL: {line!r}")
+            coords = [float(x) for x in parts[1:4]]
             vertices.append(np.array(coords))
         elif line.startswith("endfacet"):
             if len(vertices) >= 3:
                 triangles.append((vertices[0], vertices[1], vertices[2]))
+            elif vertices:
+                warnings.warn(
+                    f"Skipping face with {len(vertices)} vertices (need 3)",
+                    UserWarning,
+                    stacklevel=2,
+                )
             vertices = []
 
     if not triangles:

@@ -49,6 +49,9 @@ class Edge(_CamelModel):
     id: str
     v0: str  # vertex ID
     v1: str  # vertex ID
+    # Defaults to [] so standalone edges (no adjacent faces) can omit faceIds.
+    # The TypeScript Zod schema requires faceIds but the frontend always
+    # serializes it (even when empty), so this is backward-compatible.
     face_ids: list[str] = Field(default_factory=list)
 
 

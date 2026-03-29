@@ -162,6 +162,32 @@ class TestConsistencyValidation:
         names = geo.all_groups_have_voltage()
         assert "plate" in names
 
+    def test_bad_face_ref_in_edge(self):
+        data = _valid_geometry()
+        data["edges"][0]["faceIds"] = ["no_such_face"]
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("no_such_face" in e for e in errors)
+
+    def test_group_order_references_nonexistent_group(self):
+        data = _valid_geometry()
+        data["groupOrder"] = ["g0", "g_nonexistent"]
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("g_nonexistent" in e for e in errors)
+
+    def test_empty_geometry_with_nonempty_group_order(self):
+        data = _valid_geometry(
+            vertices=[],
+            edges=[],
+            faces=[],
+            groups=[],
+            groupOrder=["g_phantom"],
+        )
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("g_phantom" in e for e in errors)
+
 
 class TestEdgeIds:
     def test_group_with_edge_ids_parses(self):
