@@ -9,9 +9,9 @@ const fs = require("fs");
 const path = require("path");
 
 const REPO_ROOT = path.resolve(__dirname, "../../..");
-const SDK_DIR = path.resolve(__dirname, "..");
-const SCHEMA_FILE = path.join(SDK_DIR, "geometry-schema.json");
-const OUTPUT_FILE = path.join(SDK_DIR, "src/geometry/schema.generated.ts");
+const SCHEMA_DIR = path.resolve(__dirname, "..");
+const SCHEMA_FILE = path.join(SCHEMA_DIR, "geometry-schema.json");
+const OUTPUT_FILE = path.join(SCHEMA_DIR, "src/geometry/schema.generated.ts");
 
 const schema = JSON.parse(fs.readFileSync(SCHEMA_FILE, "utf8"));
 const defs = schema["$defs"] || {};
@@ -108,7 +108,7 @@ function findTupleFields(obj, results = []) {
 // Build output
 const lines = [
   "// THIS FILE IS AUTO-GENERATED \u2014 DO NOT EDIT",
-  "// Regenerate with: just sdk-generate",
+  "// Regenerate with: just schema-generate",
   "",
   'import { z } from "zod";',
   "",
