@@ -40,3 +40,28 @@ check: lint format-check typecheck test
 # Run an example script (e.g. just example build_geometry)
 example name:
     uv run python examples/{{ name }}.py
+
+# --- SDK (TypeScript) ---
+
+# Install SDK dependencies
+sdk-setup:
+    cd packages/sdk && pnpm install
+
+# Generate Zod schemas from Pydantic models
+sdk-generate:
+    cd packages/sdk && pnpm run generate
+
+# Build the SDK package
+sdk-build: sdk-generate
+    cd packages/sdk && pnpm run build
+
+# Type-check the SDK
+sdk-typecheck:
+    cd packages/sdk && pnpm run typecheck
+
+# Lint and format the SDK
+sdk-check: sdk-generate sdk-typecheck
+    cd packages/sdk && pnpm run check
+
+# Run all checks (Python + SDK)
+check-all: check sdk-check sdk-build

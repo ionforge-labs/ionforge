@@ -11,7 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --extra dev       - run: uv run ruff check .
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run ty check
 
@@ -25,4 +26,28 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --extra dev       - run: uv run pytest --cov
+      - run: uv sync --extra dev
+      - run: uv run pytest --cov
+
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+      - run: uv sync --extra dev
+      - name: Install SDK dependencies
+        run: cd packages/sdk && pnpm install --frozen-lockfile
+      - name: Regenerate schemas
+        run: cd packages/sdk && pnpm run generate
+      - name: Check generated files are up to date
+        run: git diff --exit-code packages/sdk/src/geometry/schema.generated.ts
+      - name: Type-check
+        run: cd packages/sdk && pnpm run typecheck
+      - name: Lint
+        run: cd packages/sdk && pnpm run check
+      - name: Build
+        run: cd packages/sdk && pnpm run build

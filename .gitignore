@@ -12,3 +12,8 @@ htmlcov/
 .coverage
 .coverage.*
 *.so
+
+# Node / SDK
+node_modules/
+packages/sdk/dist/
+packages/sdk/geometry-schema.json
