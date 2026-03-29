@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .models import BoundingBox, Edge, Face, Group, SerializedGeometry, Vec3, Vertex
 from .primitives import AnnularDisk, Cone, Cylinder, Sphere, _MeshResult
 
@@ -28,6 +30,48 @@ class Geometry:
     def add(self, primitive: Primitive, z: float = 0.0) -> None:
         """Add a primitive to the geometry at the given z position."""
         self._groups.append(_PendingGroup(primitive=primitive, z=z))
+
+    def visualize(
+        self,
+        *,
+        backend: str = "matplotlib",
+        color_by: str | None = None,
+        show: bool = True,
+        title: str | None = None,
+        opacity: float = 1.0,
+    ) -> Any:
+        """Render a 3-D visualisation of the geometry.
+
+        Parameters
+        ----------
+        backend:
+            ``"matplotlib"`` (default), ``"plotly"``, or ``"pyvista"``.
+        color_by:
+            ``"group"`` uses each group's hex colour.  ``"voltage"`` applies a
+            diverging blue–white–red colourmap.  ``None`` (default) auto-selects
+            ``"voltage"`` when every group has a voltage, otherwise ``"group"``.
+        show:
+            If *True*, display the figure immediately.
+        title:
+            Optional figure title.
+        opacity:
+            Surface opacity (0 = transparent, 1 = opaque).
+
+        Returns
+        -------
+        Backend-specific figure object.
+        """
+        from .visualization import render
+
+        sg = self.to_serialized_geometry()
+        return render(
+            sg,
+            backend=backend,
+            color_by=color_by,
+            show=show,
+            title=title,
+            opacity=opacity,
+        )
 
     def to_serialized_geometry(self) -> SerializedGeometry:
         """Build the final SerializedGeometry from all added primitives."""
