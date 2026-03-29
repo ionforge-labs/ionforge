@@ -89,6 +89,51 @@ write_stl("output.stl", triangles, name="my_mesh")
 
 See [`examples/stl_round_trip.py`](examples/stl_round_trip.py) for a self-contained runnable version.
 
+### Visualization
+
+Geometry can be rendered in 3-D with three backends: **matplotlib** (default, no extra deps), **plotly** (interactive, great for Jupyter/Colab), and **pyvista** (full VTK).
+
+```python
+geo = Geometry(bounding_box=(0.06, 0.06, 0.12))
+geo.add(Cylinder(r=0.01, length=0.03, voltage=0, name="tube"))
+# ... build geometry ...
+
+geo.visualize()                          # matplotlib (default)
+geo.visualize(backend="plotly")          # interactive HTML widget
+geo.visualize(backend="pyvista")         # VTK 3-D window
+```
+
+Color by group name or by voltage (auto-selected when every group has a voltage):
+
+```python
+geo.visualize(color_by="voltage")        # blue–white–red diverging colourmap
+geo.visualize(color_by="group")          # per-group hex colours
+```
+
+You can also render a `SerializedGeometry` directly:
+
+```python
+from ionforge.geometry.visualization import render
+
+render(serialized, backend="plotly", color_by="voltage", opacity=0.8)
+```
+
+Install optional visualization backends:
+
+```bash
+uv add ionforge --extra viz-plotly    # plotly only
+uv add ionforge --extra viz-pyvista   # pyvista only
+uv add ionforge --extra viz           # all visualization deps
+```
+
+Per-backend examples:
+
+- [`examples/viz_matplotlib.py`](examples/viz_matplotlib.py) — static 3-D plot (no extra deps)
+- [`examples/viz_plotly.py`](examples/viz_plotly.py) — interactive HTML widget
+- [`examples/viz_pyvista.py`](examples/viz_pyvista.py) — full VTK 3-D window
+
+See also [`examples/visualize_geometry.py`](examples/visualize_geometry.py) for a CLI version with `--backend` and `--color-by` flags.
+
 ### JSON round-trip
 
 Geometry models use snake_case in Python and camelCase when serialized to JSON, matching the TypeScript frontend. Both naming conventions are accepted when parsing.
@@ -174,5 +219,5 @@ errors = geo.validate_consistency()  # [] if valid
 uv sync --extra dev
 uv run pytest
 uv run ruff check .
-uv run pyright
+uv run ty check
 ```
