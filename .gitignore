@@ -15,5 +15,5 @@ htmlcov/
 
 # Node / SDK
 node_modules/
-packages/sdk/dist/
-packages/sdk/geometry-schema.json
+packages/schema/dist/
+packages/schema/geometry-schema.json

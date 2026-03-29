@@ -1,5 +1,5 @@
 // THIS FILE IS AUTO-GENERATED — DO NOT EDIT
-// Regenerate with: just sdk-generate
+// Regenerate with: just schema-generate
 
 import { z } from "zod";
 

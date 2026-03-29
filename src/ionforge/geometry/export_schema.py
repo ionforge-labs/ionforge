@@ -7,7 +7,7 @@ Usage::
 The output can be fed into ``json-schema-to-zod`` to generate a Zod
 schema that stays in sync with the Python models::
 
-    cd packages/sdk && pnpm run generate
+    cd packages/schema && pnpm run generate
 """
 
 import json

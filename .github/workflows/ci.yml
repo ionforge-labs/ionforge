@@ -29,7 +29,7 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run pytest --cov
 
-  sdk:
+  schema:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,14 +40,14 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: uv sync --extra dev
       - name: Install SDK dependencies
-        run: cd packages/sdk && pnpm install --frozen-lockfile
+        run: cd packages/schema && pnpm install --frozen-lockfile
       - name: Regenerate schemas
-        run: cd packages/sdk && pnpm run generate
+        run: cd packages/schema && pnpm run generate
       - name: Check generated files are up to date
-        run: git diff --exit-code packages/sdk/src/geometry/schema.generated.ts
+        run: git diff --exit-code packages/schema/src/geometry/schema.generated.ts
       - name: Type-check
-        run: cd packages/sdk && pnpm run typecheck
+        run: cd packages/schema && pnpm run typecheck
       - name: Lint
-        run: cd packages/sdk && pnpm run check
+        run: cd packages/schema && pnpm run check
       - name: Build
-        run: cd packages/sdk && pnpm run build
+        run: cd packages/schema && pnpm run build
