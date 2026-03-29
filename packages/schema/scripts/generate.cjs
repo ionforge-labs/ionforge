@@ -105,6 +105,38 @@ function findTupleFields(obj, results = []) {
   return results;
 }
 
+/**
+ * Post-process generated Zod code for a $def schema:
+ * - Non-required array fields: .optional() → .default([])
+ * - anyOf [{type:"number"},{type:"null"}]: z.union([z.number(), z.null()]) → z.number().nullable()
+ */
+function fixDefaults(code, def) {
+  const props = def.properties || {};
+  const req = new Set(def.required || []);
+
+  for (const [key, prop] of Object.entries(props)) {
+    if (req.has(key)) continue;
+
+    // Non-required array fields should default to [] rather than be optional
+    if (prop.type === "array") {
+      // Match the field pattern: "fieldName": <anything>.optional()
+      // Use [^,}]+ to capture the value up to .optional() (no commas/braces)
+      const re = new RegExp(
+        `("${key}":\\s*[^,}]+)\\.optional\\(\\)`,
+      );
+      code = code.replace(re, "$1.default([])");
+    }
+  }
+
+  // z.union([z.number(), z.null()]) → z.number().nullable()
+  code = code.replace(
+    /z\.union\(\[z\.number\(\),\s*z\.null\(\)\]\)/g,
+    "z.number().nullable()",
+  );
+
+  return code;
+}
+
 // Build output
 const lines = [
   "// THIS FILE IS AUTO-GENERATED \u2014 DO NOT EDIT",
@@ -117,7 +149,8 @@ const lines = [
 // Named sub-schemas
 for (const [name, def] of Object.entries(defs)) {
   const varName = name.charAt(0).toLowerCase() + name.slice(1) + "Schema";
-  const code = generateSchema(def);
+  let code = generateSchema(def);
+  code = fixDefaults(code, def);
   lines.push(`export const ${varName} = ${code};`);
   lines.push("");
 }
@@ -150,7 +183,20 @@ for (const [key, prop] of Object.entries(rootProps)) {
   }
 
   if (!required.has(key)) {
-    fieldCode += ".optional()";
+    // Fields with const+default (e.g. version: Literal[1] = 1) should be
+    // strict literals, not optional.  The only valid value IS the const,
+    // so strip the redundant .default() that jsonSchemaToZod adds.
+    if (prop.const !== undefined && prop.default !== undefined) {
+      fieldCode = fieldCode.replace(/\.default\([^)]*\)/, "");
+    } else if (prop.default !== undefined) {
+      // Field has a default value — emit .default() instead of .optional()
+      // so the output type always includes the field.
+      const defaultVal = JSON.stringify(prop.default);
+      fieldCode = fieldCode.replace(/\.default\([^)]*\)/, "");
+      fieldCode += `.default(${defaultVal})`;
+    } else {
+      fieldCode += ".optional()";
+    }
   }
 
   rootFields.push(`  ${key}: ${fieldCode},`);

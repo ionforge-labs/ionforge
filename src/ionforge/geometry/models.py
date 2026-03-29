@@ -57,7 +57,7 @@ class Edge(_CamelModel):
 
 class Face(_CamelModel):
     id: str
-    vertex_ids: list[str] = Field(min_length=3)
+    vertex_ids: list[str] = Field(min_length=2)
     edge_ids: list[str]
 
 
@@ -83,6 +83,7 @@ class Group(_CamelModel):
 class SerializedGeometry(_CamelModel):
     version: Literal[1] = 1
     units: Literal["m"] = "m"
+    symmetry: Literal["none", "axisymmetric"] = "none"
     vertices: list[Vertex]
     edges: list[Edge]
     faces: list[Face]
