@@ -18,7 +18,7 @@ def render(
 ) -> Any:
     """Render *prepared* mesh using PyVista."""
     try:
-        import pyvista as pv  # type: ignore[import-not-found]
+        import pyvista as pv  # ty: ignore[unresolved-import]
     except ImportError:
         raise ImportError(
             "pyvista is required for the 'pyvista' backend. "

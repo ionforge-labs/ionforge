@@ -18,7 +18,7 @@ def render(
 ) -> Any:
     """Render *prepared* mesh using Plotly Mesh3d traces."""
     try:
-        import plotly.graph_objects as go  # type: ignore[import-not-found]
+        import plotly.graph_objects as go  # ty: ignore[unresolved-import]
     except ImportError:
         raise ImportError(
             "plotly is required for the 'plotly' backend. "
