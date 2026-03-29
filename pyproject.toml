@@ -35,7 +35,11 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.11",
     "pyright>=1.1",
+    "matplotlib>=3.5",
 ]
+viz-plotly = ["plotly>=5.0"]
+viz-pyvista = ["pyvista>=0.42"]
+viz = ["matplotlib>=3.5", "plotly>=5.0", "pyvista>=0.42"]
 
 [project.urls]
 Repository = "https://github.com/ionforge-labs/ionforge"
