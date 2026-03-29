@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -38,9 +38,13 @@ jobs:
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - run: uv sync --extra dev
       - name: Install SDK dependencies
         run: cd packages/schema && pnpm install --frozen-lockfile
+      - name: Export JSON Schema from Pydantic models
+        run: uv run python -m ionforge.geometry.export_schema > packages/schema/geometry-schema.json
       - name: Regenerate schemas
         run: cd packages/schema && pnpm run generate
       - name: Check generated files are up to date

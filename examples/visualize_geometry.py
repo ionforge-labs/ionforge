@@ -24,7 +24,9 @@ def build_einzel_lens() -> Geometry:
 
     # Entry aperture plate
     geo.add(
-        AnnularDisk(inner_radius=0.005, outer_radius=0.01, voltage=0, name="entry_plate"),
+        AnnularDisk(
+            inner_radius=0.005, outer_radius=0.01, voltage=0, name="entry_plate"
+        ),
         z=0.03,
     )
 
