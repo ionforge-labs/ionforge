@@ -41,6 +41,8 @@ jobs:
       - run: uv sync --extra dev
       - name: Install SDK dependencies
         run: cd packages/schema && pnpm install --frozen-lockfile
+      - name: Export JSON Schema from Pydantic models
+        run: uv run python -m ionforge.geometry.export_schema > packages/schema/geometry-schema.json
       - name: Regenerate schemas
         run: cd packages/schema && pnpm run generate
       - name: Check generated files are up to date

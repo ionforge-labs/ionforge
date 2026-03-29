@@ -38,4 +38,7 @@ if unassigned:
 else:
     print("All groups have voltages assigned.")
 
-print(f"\n{len(serialized.vertices)} vertices, {len(serialized.faces)} faces, {len(serialized.groups)} groups")
+n_verts = len(serialized.vertices)
+n_faces = len(serialized.faces)
+n_groups = len(serialized.groups)
+print(f"\n{n_verts} vertices, {n_faces} faces, {n_groups} groups")

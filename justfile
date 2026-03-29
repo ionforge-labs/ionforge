@@ -37,6 +37,12 @@ typecheck:
 # Run all checks (lint, format, typecheck, test)
 check: lint format-check typecheck test
 
+# Install git hooks (pre-push)
+install-hooks:
+    cp scripts/pre-push .git/hooks/pre-push
+    chmod +x .git/hooks/pre-push
+    @echo "Git hooks installed."
+
 # Run an example script (e.g. just example build_geometry)
 example name:
     uv run python examples/{{ name }}.py
@@ -49,6 +55,7 @@ schema-setup:
 
 # Generate Zod schemas from Pydantic models
 schema-generate:
+    uv run python -m ionforge.geometry.export_schema > packages/schema/geometry-schema.json
     cd packages/schema && pnpm run generate
 
 # Build the schema package

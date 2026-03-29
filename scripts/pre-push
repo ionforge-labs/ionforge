@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Pre-push hook: runs lint, format check, type check, and tests before pushing.
+# Install with: just install-hooks
+
+set -euo pipefail
+
+echo "Running pre-push checks..."
+
+echo "  ruff check..."
+uv run ruff check .
+
+echo "  ruff format --check..."
+uv run ruff format --check .
+
+echo "  ty check..."
+uv run ty check
+
+echo "  pytest..."
+uv run pytest -q
+
+echo "All pre-push checks passed."

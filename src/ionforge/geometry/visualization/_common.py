@@ -138,9 +138,7 @@ def prepare_mesh(
         i0, i1, i2 = (vid_to_idx[vid] for vid in face.vertex_ids[:3])
         gi = fid_to_group.get(face.id)
         color = group_colors[gi] if gi is not None else _GREY
-        face_data.append(
-            FaceData(vertex_indices=(i0, i1, i2), color=color)
-        )
+        face_data.append(FaceData(vertex_indices=(i0, i1, i2), color=color))
 
     groups_info = [
         GroupInfo(name=g.name, color=group_colors[i], voltage=g.voltage)
