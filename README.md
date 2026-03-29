@@ -140,7 +140,7 @@ See also [`examples/visualize_geometry.py`](examples/visualize_geometry.py) for 
 
 ### JSON round-trip
 
-Geometry models use snake_case in Python and camelCase when serialized to JSON, matching the TypeScript frontend. Both naming conventions are accepted when parsing.
+Geometry models use snake_case in Python and camelCase when serialized to JSON. Both naming conventions are accepted when parsing.
 
 ```python
 import json
