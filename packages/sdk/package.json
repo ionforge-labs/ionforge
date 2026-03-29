@@ -1,0 +1,42 @@
+{
+  "name": "@ionforge/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript types and Zod schemas for IonForge",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./geometry": {
+      "types": "./dist/geometry/index.d.ts",
+      "import": "./dist/geometry/index.mjs",
+      "require": "./dist/geometry/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "generate": "node scripts/generate.cjs",
+    "build": "tsup",
+    "check": "biome check src/",
+    "format": "biome check --write src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.25"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9",
+    "json-schema-to-zod": "^2.5",
+    "tsup": "^8.3",
+    "typescript": "^5.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "@biomejs/biome"]
+  }
+}
