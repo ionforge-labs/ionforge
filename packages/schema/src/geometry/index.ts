@@ -4,6 +4,7 @@ export {
   faceSchema,
   groupSchema,
   serializedGeometrySchema,
+  serializedGeometrySchema as SerializedGeometrySchema,
   vertexSchema,
 } from "./schema.generated";
 export type {
