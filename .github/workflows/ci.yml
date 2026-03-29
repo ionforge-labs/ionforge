@@ -24,5 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --extra dev --extra stl --python ${{ matrix.python-version }}
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --extra dev --extra stl
       - run: uv run pytest --cov
