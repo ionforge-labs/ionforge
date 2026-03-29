@@ -17,12 +17,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-try:
-    import numpy as np
-except ImportError as exc:
-    raise ImportError(
-        "numpy is required for STL support. Install it with: uv add 'ionforge[stl]'"
-    ) from exc
+import numpy as np
 
 if TYPE_CHECKING:
     from typing import Any

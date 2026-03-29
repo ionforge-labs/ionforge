@@ -5,6 +5,7 @@ designed to be Pyodide-safe so the same code can run in the browser
 (parametric geometry editor) and on the server (Batch converter).
 """
 
+from .builder import Geometry
 from .models import (
     BoundingBox,
     Edge,
@@ -14,13 +15,19 @@ from .models import (
     Vec3,
     Vertex,
 )
+from .primitives import AnnularDisk, Cone, Cylinder, Sphere
 
 __all__ = [
+    "AnnularDisk",
     "BoundingBox",
+    "Cone",
+    "Cylinder",
     "Edge",
     "Face",
+    "Geometry",
     "Group",
     "SerializedGeometry",
+    "Sphere",
     "Vec3",
     "Vertex",
 ]
