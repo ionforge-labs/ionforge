@@ -188,6 +188,12 @@ for (const [key, prop] of Object.entries(rootProps)) {
     // so strip the redundant .default() that jsonSchemaToZod adds.
     if (prop.const !== undefined && prop.default !== undefined) {
       fieldCode = fieldCode.replace(/\.default\([^)]*\)/, "");
+    } else if (prop.default !== undefined) {
+      // Field has a default value — emit .default() instead of .optional()
+      // so the output type always includes the field.
+      const defaultVal = JSON.stringify(prop.default);
+      fieldCode = fieldCode.replace(/\.default\([^)]*\)/, "");
+      fieldCode += `.default(${defaultVal})`;
     } else {
       fieldCode += ".optional()";
     }
