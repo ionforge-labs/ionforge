@@ -110,6 +110,10 @@ geo.visualize(color_by="voltage")        # blue–white–red diverging colourma
 geo.visualize(color_by="group")          # per-group hex colours
 ```
 
+| Colour by voltage | Colour by group |
+|---|---|
+| ![voltage](docs/images/viz_voltage.png) | ![group](docs/images/viz_group.png) |
+
 You can also render a `SerializedGeometry` directly:
 
 ```python
