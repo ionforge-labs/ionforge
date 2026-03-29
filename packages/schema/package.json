@@ -3,6 +3,17 @@
   "version": "0.1.0",
   "description": "Zod schemas and TypeScript types for IonForge data formats",
   "license": "Apache-2.0",
+  "authors": [
+    "Michael Giles",
+    "Puneet Matharu",
+    "Jacob Cable"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ionforge-labs/ionforge",
+    "directory": "packages/schema"
+  },
+  "homepage": "https://github.com/ionforge-labs/ionforge/tree/main/packages/schema",
   "type": "module",
   "exports": {
     ".": {
@@ -19,7 +30,7 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": ["dist", "LICENSE", "NOTICE", "README.md"],
   "scripts": {
     "generate": "node scripts/generate.cjs",
     "build": "tsup",
