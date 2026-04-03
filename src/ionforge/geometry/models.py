@@ -1,95 +1,50 @@
-"""Pydantic v2 models for the SerializedGeometry format.
+"""Geometry models — overlay on generated types with validation methods.
 
-These are the canonical Python definition of the geometry schema shared
-between the TypeScript frontend (via generated Zod) and the Python
-simulator (via the converter module).
+The generated Pydantic models come from the OpenAPI spec via
+``datamodel-code-generator``. This module re-exports them and adds
+domain-specific validation that codegen can't produce.
 
 Design constraints
 ------------------
 - Zero scipy imports (Pyodide-safe).
-- numpy allowed but not required for the models themselves.
-- Field names are snake_case in Python, camelCase when serialised to JSON
-  (matching the TypeScript ``SerializedGeometry`` interface).
+- Field names are snake_case in Python, camelCase when serialised to JSON.
 """
 
 from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-def _to_camel(name: str) -> str:
-    parts = name.split("_")
-    return parts[0] + "".join(w.capitalize() for w in parts[1:])
-
-
-class _CamelModel(BaseModel):
-    """Base with camelCase JSON aliases and sensible defaults."""
-
-    model_config = ConfigDict(
-        alias_generator=_to_camel,
-        populate_by_name=True,
-    )
-
-
-# ------------------------------------------------------------------
-# Primitives
-# ------------------------------------------------------------------
+from ionforge.client._generated import (
+    BoundingBox,
+    Edge,
+    Face,
+    Group,
+)
+from ionforge.client._generated import (
+    SerializedGeometry as _GeneratedSerializedGeometry,
+)
+from ionforge.client._generated import (
+    Vertice as Vertex,
+)
 
 Vec3 = tuple[float, float, float]
 
-
-class Vertex(_CamelModel):
-    id: str
-    position: Vec3  # metres
-
-
-class Edge(_CamelModel):
-    id: str
-    v0: str  # vertex ID
-    v1: str  # vertex ID
-    # Defaults to [] so standalone edges (no adjacent faces) can omit faceIds.
-    # The TypeScript Zod schema requires faceIds but the frontend always
-    # serializes it (even when empty), so this is backward-compatible.
-    face_ids: list[str] = Field(default_factory=list)
+__all__ = [
+    "BoundingBox",
+    "Edge",
+    "Face",
+    "Group",
+    "SerializedGeometry",
+    "Vec3",
+    "Vertex",
+]
 
 
-class Face(_CamelModel):
-    id: str
-    vertex_ids: list[str] = Field(min_length=2)
-    edge_ids: list[str]
+class SerializedGeometry(_GeneratedSerializedGeometry):
+    """Serialised geometry with cross-field validation."""
 
-
-class BoundingBox(_CamelModel):
-    size: Vec3  # metres
-    voltage: float  # boundary condition (V), typically 0
-
-
-class Group(_CamelModel):
-    id: str
-    name: str
-    color: str  # hex colour
-    voltage: float | None  # None = unassigned
-    face_ids: list[str] = Field(default_factory=list)
-    edge_ids: list[str] = Field(default_factory=list)
-
-
-# ------------------------------------------------------------------
-# Root model
-# ------------------------------------------------------------------
-
-
-class SerializedGeometry(_CamelModel):
     version: Literal[1] = 1
     units: Literal["m"] = "m"
-    symmetry: Literal["none", "axisymmetric"] = "none"
-    vertices: list[Vertex]
-    edges: list[Edge]
-    faces: list[Face]
-    bounding_box: BoundingBox
-    groups: list[Group]
-    group_order: list[str]
 
     def validate_consistency(self) -> list[str]:
         """Check cross-field invariants that Pydantic can't express.
@@ -104,17 +59,15 @@ class SerializedGeometry(_CamelModel):
         face_ids = {f.id for f in self.faces}
         group_ids = {g.id for g in self.groups}
 
-        # Edges reference valid vertices
         for edge in self.edges:
             if edge.v0 not in vertex_ids:
                 errors.append(f"edge '{edge.id}' references unknown vertex '{edge.v0}'")
             if edge.v1 not in vertex_ids:
                 errors.append(f"edge '{edge.id}' references unknown vertex '{edge.v1}'")
-            for fid in edge.face_ids:
+            for fid in edge.face_ids or []:
                 if fid not in face_ids:
                     errors.append(f"edge '{edge.id}' references unknown face '{fid}'")
 
-        # Faces reference valid vertices and edges
         for face in self.faces:
             for vid in face.vertex_ids:
                 if vid not in vertex_ids:
@@ -123,28 +76,25 @@ class SerializedGeometry(_CamelModel):
                 if eid not in edge_ids:
                     errors.append(f"face '{face.id}' references unknown edge '{eid}'")
 
-        # Groups reference valid faces and edges
         for group in self.groups:
-            for fid in group.face_ids:
+            for fid in group.face_ids or []:
                 if fid not in face_ids:
                     errors.append(
                         f"group '{group.name}' references unknown face '{fid}'"
                     )
-            for eid in group.edge_ids:
+            for eid in group.edge_ids or []:
                 if eid not in edge_ids:
                     errors.append(
                         f"group '{group.name}' references unknown edge '{eid}'"
                     )
 
-        # Group order references valid groups
         for gid in self.group_order:
             if gid not in group_ids:
                 errors.append(f"groupOrder references unknown group '{gid}'")
 
-        # Every face belongs to at most one group
         seen_faces: dict[str, str] = {}
         for group in self.groups:
-            for fid in group.face_ids:
+            for fid in group.face_ids or []:
                 if fid in seen_faces:
                     errors.append(
                         f"face '{fid}' belongs to both group "

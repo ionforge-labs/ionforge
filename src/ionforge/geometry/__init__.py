@@ -2,7 +2,7 @@
 
 This subpackage intentionally has no scipy or simulator imports — it is
 designed to be Pyodide-safe so the same code can run in the browser
-(parametric geometry editor) and on the server (Batch converter).
+and on the server.
 """
 
 from .builder import Geometry

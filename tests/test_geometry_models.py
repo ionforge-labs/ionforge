@@ -53,7 +53,7 @@ class TestModelParsing:
         geo = SerializedGeometry.model_validate(_valid_geometry())
         assert geo.version == 1
         assert len(geo.vertices) == 3
-        assert geo.vertices[0].position == (0.0, 0.0, 0.0)
+        assert geo.vertices[0].position == [0.0, 0.0, 0.0]
         assert geo.edges[0].face_ids == ["f0"]
         assert geo.bounding_box.voltage == 0.0
         assert geo.groups[0].voltage == 10.0

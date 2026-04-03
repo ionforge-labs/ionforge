@@ -13,7 +13,8 @@ htmlcov/
 .coverage.*
 *.so
 
-# Node / SDK
+# Node
 node_modules/
-packages/schema/dist/
-packages/schema/geometry-schema.json
+
+# OpenAPI spec (not tracked)
+openapi.json
