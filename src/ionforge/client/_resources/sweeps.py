@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from .._generated import (
+from ionforge._types._generated import (
     CreateSimulationSweepRequest,
     ParameterSpace,
     Sweep,
 )
+
 from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from .._transport import AsyncTransport, SyncTransport

@@ -718,7 +718,7 @@ wheels = [
 
 [[package]]
 name = "ionforge"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -731,6 +731,7 @@ client = [
     { name = "httpx" },
 ]
 dev = [
+    { name = "datamodel-code-generator", extra = ["http"] },
     { name = "httpx" },
     { name = "matplotlib" },
     { name = "pytest" },
@@ -750,13 +751,9 @@ viz-pyvista = [
     { name = "pyvista" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "datamodel-code-generator", extra = ["http"] },
-]
-
 [package.metadata]
 requires-dist = [
+    { name = "datamodel-code-generator", extras = ["http"], marker = "extra == 'dev'", specifier = ">=0.28" },
     { name = "httpx", marker = "extra == 'client'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.5" },
@@ -773,9 +770,6 @@ requires-dist = [
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.1a0" },
 ]
 provides-extras = ["client", "dev", "viz-plotly", "viz-pyvista", "viz"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "datamodel-code-generator", extras = ["http"], specifier = ">=0.28" }]
 
 [[package]]
 name = "isort"

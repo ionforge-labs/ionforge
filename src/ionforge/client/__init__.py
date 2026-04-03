@@ -29,19 +29,7 @@ if TYPE_CHECKING:
     from ionforge.geometry.builder import Geometry
     from ionforge.geometry.models import SerializedGeometry
 
-from ._config import resolve_config
-from ._exceptions import (
-    APIError,
-    AuthenticationError,
-    BadRequestError,
-    ConflictError,
-    ConnectionError,
-    InternalServerError,
-    NotFoundError,
-    PermissionDeniedError,
-    RateLimitError,
-)
-from ._generated import (
+from ionforge._types._generated import (
     BeamParams,
     Coils,
     Coils1,
@@ -65,6 +53,19 @@ from ._generated import (
     SolverParams,
     SpaceChargeParams,
     Sweep,
+)
+
+from ._config import resolve_config
+from ._exceptions import (
+    APIError,
+    AuthenticationError,
+    BadRequestError,
+    ConflictError,
+    ConnectionError,
+    InternalServerError,
+    NotFoundError,
+    PermissionDeniedError,
+    RateLimitError,
 )
 from ._models.pagination import Page
 from ._polling import async_poll_job, async_poll_sweep, poll_job, poll_sweep

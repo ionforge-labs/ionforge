@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from pydantic import AwareDatetime, Field, confloat, conint, constr
 
-from ionforge.client._base_model import ApiModel
+from ionforge._types._base_model import ApiModel
 
 
 class Project(ApiModel):

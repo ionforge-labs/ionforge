@@ -54,9 +54,9 @@ codegen spec:
     uv run datamodel-codegen \
         --input {{ spec }} \
         --input-file-type openapi \
-        --output src/ionforge/client/_generated.py \
+        --output src/ionforge/_types/_generated.py \
         --output-model-type pydantic_v2.BaseModel \
-        --base-class ionforge.client._base_model.ApiModel \
+        --base-class ionforge._types._base_model.ApiModel \
         --snake-case-field \
         --use-union-operator \
         --use-standard-collections \
@@ -64,7 +64,7 @@ codegen spec:
         --openapi-scopes schemas paths \
         --use-operation-id-as-name \
         --formatters ruff-format ruff-check
-    @echo "Generated src/ionforge/client/_generated.py"
+    @echo "Generated src/ionforge/_types/_generated.py"
 
 # Run all checks
 check-all: check

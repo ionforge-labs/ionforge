@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from .._generated import (
+from ionforge._types._generated import (
     CreateGeometryRequest,
     GeometryListItem,
     GeometryMeta,
@@ -13,6 +13,7 @@ from .._generated import (
     SerializedGeometry,
     UpdateGeometryRequest,
 )
+
 from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from ._base import BaseAsyncResource, BaseSyncResource

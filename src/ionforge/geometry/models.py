@@ -14,16 +14,16 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ionforge.client._generated import (
+from ionforge._types._generated import (
     BoundingBox,
     Edge,
     Face,
     Group,
 )
-from ionforge.client._generated import (
+from ionforge._types._generated import (
     SerializedGeometry as _GeneratedSerializedGeometry,
 )
-from ionforge.client._generated import (
+from ionforge._types._generated import (
     Vertice as Vertex,
 )
 

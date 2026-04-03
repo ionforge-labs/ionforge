@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from .._generated import PresignUploadResponse
+from ionforge._types._generated import PresignUploadResponse
+
 from ._base import BaseAsyncResource, BaseSyncResource
 
 

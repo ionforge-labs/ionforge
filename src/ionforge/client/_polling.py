@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from ._generated import Job, Sweep
+from ionforge._types._generated import Job, Sweep
 
 if TYPE_CHECKING:
     from ._resources.jobs import AsyncJobs, Jobs
