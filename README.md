@@ -37,6 +37,8 @@ uv run python examples/<name>.py
 
 Build geometry using `Cylinder`, `AnnularDisk`, `Cone`, and `Sphere` primitives. Each primitive takes a `voltage`, `name`, and `n_segments` (default 32) for mesh resolution.
 
+Primitives extrude along the z axis (the optical axis) and are centred on it in x/y; lengths and positions are in metres. The axes, origin, and bounding-box conventions are documented in [`docs/parameters.md`](docs/parameters.md#axes-origin-and-the-bounding-box).
+
 ```python
 from ionforge.geometry import Geometry, Cylinder, AnnularDisk, Cone, Sphere
 
@@ -257,6 +259,8 @@ with IonForge() as client:  # reads IONFORGE_API_KEY
 ```
 
 An `AsyncIonForge` client with the same surface is available for asyncio code.
+
+Simulation runs are configured with `ModelParams` (beam, solver, integrator, and more). Every field — with units, defaults, and conventions — is documented in [`docs/parameters.md`](docs/parameters.md).
 
 See [`examples/run_simulation.py`](examples/run_simulation.py) for a complete, runnable end-to-end workflow that builds an einzel lens, uploads it, runs a simulation, and downloads the results.
 

@@ -20,6 +20,10 @@ If ``--project-id`` is omitted a new project is created for you.
 
 Units follow the SDK conventions: lengths in metres and voltages in volts
 (SI), while beam energies use electron-volts, matching the API's beam model.
+
+Every simulation parameter set below (beam, solver, and the other
+``ModelParams`` blocks) is documented field-by-field, with units and defaults,
+in ``docs/parameters.md``.
 """
 
 from __future__ import annotations
