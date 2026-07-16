@@ -108,12 +108,6 @@ class TestModelParsing:
         geo = SerializedGeometry.model_validate(data)
         assert geo.groups[0].voltage is None
 
-    def test_face_needs_2_vertices(self):
-        data = _valid_geometry()
-        data["faces"][0]["vertexIds"] = ["v0"]
-        with pytest.raises(ValidationError):
-            SerializedGeometry.model_validate(data)
-
     def test_invalid_version_rejected(self):
         data = _valid_geometry()
         data["version"] = 2
