@@ -21,32 +21,37 @@ class PageIterator(Generic[T], Iterator[T]):
         self._fetch = fetch
         self._page_size = page_size
         self._buffer: list[T] = []
+        self._cursor = 0
         self._offset = 0
-        self._total: int | None = None
         self._exhausted = False
 
     def __iter__(self) -> Iterator[T]:
         return self
 
     def __next__(self) -> T:
-        if self._buffer:
-            return self._buffer.pop(0)
+        while self._cursor >= len(self._buffer):
+            if self._exhausted:
+                raise StopIteration
+            self._fetch_next_page()
 
-        if self._exhausted:
-            raise StopIteration
+        item = self._buffer[self._cursor]
+        self._cursor += 1
+        return item
 
+    def _fetch_next_page(self) -> None:
         page = self._fetch(self._offset)
-        self._total = page.total
-        self._offset += self._page_size
-
-        if not page.items or self._offset >= page.total:
-            self._exhausted = True
-
+        # Advance by the number of items actually returned: a server is free to
+        # clamp the page below the requested size, so trusting page_size here
+        # would skip or repeat items. An empty page means exhaustion, whatever
+        # the reported total claims.
+        self._offset += len(page.items)
         if not page.items:
-            raise StopIteration
-
-        self._buffer = list(page.items[1:])
-        return page.items[0]
+            self._exhausted = True
+            return
+        if self._offset >= page.total:
+            self._exhausted = True
+        self._buffer = list(page.items)
+        self._cursor = 0
 
 
 class AsyncPageIterator(Generic[T], AsyncIterator[T]):
@@ -60,29 +65,30 @@ class AsyncPageIterator(Generic[T], AsyncIterator[T]):
         self._fetch = fetch
         self._page_size = page_size
         self._buffer: list[T] = []
+        self._cursor = 0
         self._offset = 0
-        self._total: int | None = None
         self._exhausted = False
 
     def __aiter__(self) -> AsyncPageIterator[T]:
         return self
 
     async def __anext__(self) -> T:
-        if self._buffer:
-            return self._buffer.pop(0)
+        while self._cursor >= len(self._buffer):
+            if self._exhausted:
+                raise StopAsyncIteration
+            await self._fetch_next_page()
 
-        if self._exhausted:
-            raise StopAsyncIteration
+        item = self._buffer[self._cursor]
+        self._cursor += 1
+        return item
 
+    async def _fetch_next_page(self) -> None:
         page = await self._fetch(self._offset)
-        self._total = page.total
-        self._offset += self._page_size
-
-        if not page.items or self._offset >= page.total:
-            self._exhausted = True
-
+        self._offset += len(page.items)
         if not page.items:
-            raise StopAsyncIteration
-
-        self._buffer = list(page.items[1:])
-        return page.items[0]
+            self._exhausted = True
+            return
+        if self._offset >= page.total:
+            self._exhausted = True
+        self._buffer = list(page.items)
+        self._cursor = 0

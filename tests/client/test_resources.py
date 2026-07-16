@@ -116,6 +116,20 @@ def test_models_create_serializes_params_camelcase() -> None:
     assert body["params"]["beam"]["n_particles"] == 50
 
 
+def test_models_create_sparse_params_sends_only_set_fields() -> None:
+    router = Router().json("POST", r"/v1/models", make_model())
+    client = make_client(router)
+    # Only beam.e_nominal is set; every other beam field keeps its default and
+    # must not appear on the wire, so a run-level override carries just the
+    # changed value instead of re-inflating to the full default object.
+    params = ModelParams(beam=BeamParams(e_nominal=1000.0))
+    client.models.create(
+        project_id="proj_1", name="m", geometry_id="geo_1", params=params
+    )
+    body = _body(router.last)
+    assert body["params"] == {"beam": {"E_nominal": 1000.0}}
+
+
 def test_models_get_returns_counts() -> None:
     router = Router().add(
         "GET",
