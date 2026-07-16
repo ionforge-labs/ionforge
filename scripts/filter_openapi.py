@@ -2,10 +2,9 @@
 
 The published Python SDK exposes the core charged particle optics resources:
 projects, geometries, models, runs, sweeps, and upload presigning. The upstream
-spec also documents surfaces that are not part of the SDK's remit (interactive
-notebooks, workspace administration, and other product-only endpoints); this
-script keeps only the core paths and prunes any component schemas that are no
-longer referenced, so the generated types stay small and focused.
+spec also documents surfaces that are not part of the SDK's remit; this script
+keeps only the core paths and prunes any component schemas that are no longer
+referenced, so the generated types stay small and focused.
 
 Usage::
 
@@ -53,7 +52,14 @@ ALLOWED_PATHS: frozenset[str] = frozenset(
 # request and response schema. Removing a property here also drops it from any
 # sibling ``required`` list, so a schema that existed only to type that property
 # becomes unreferenced and is pruned by the reachability pass below.
-STRIPPED_PROPERTIES: frozenset[str] = frozenset({"imageVariant"})
+STRIPPED_PROPERTIES: frozenset[str] = frozenset(
+    {
+        "imageVariant",
+        "editorLockHolderId",
+        "editorLockExpiresAt",
+        "displayImageUrl",
+    }
+)
 
 
 def _is_allowed(path: str) -> bool:

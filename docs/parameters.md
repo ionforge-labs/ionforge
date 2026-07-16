@@ -87,7 +87,7 @@ Selects the field solver and its discretisation.
 | `bem_2d` | Boundary element, 2-D | Accepted alias for the axisymmetric boundary-element formulation; use `bem_axisym` for new work |
 | `bem_3d` | Boundary element, 3-D | 3-D geometries where a surface method is preferable to a volume grid |
 | `bem_axisym` | Boundary element, axisymmetric | Rotationally symmetric lenses (the einzel-lens example uses this) |
-| `hybrid` | Combined approach | Setups the platform routes through more than one method |
+| `hybrid` | Combined approach | Combines more than one solver method for a single geometry |
 
 ### `resolution`: `Resolution`
 
@@ -240,7 +240,7 @@ Each `Electrode`:
 | `name` | str (non-empty) | **required** | - | Electrode name; used to reference it (e.g. from an RF drive). |
 | `voltage` | float | **required** | V | Voltage to hold this electrode at. |
 | `group` | str | `None` | - | Optional geometry group this electrode maps to. |
-| `mask_key` | str | `None` | - | Optional key selecting a solver mask for this electrode. |
+| `mask_key` | str | `None` | - | Optional solver-specific key associated with this electrode. |
 
 ## `callbacks`: `Callbacks`
 
