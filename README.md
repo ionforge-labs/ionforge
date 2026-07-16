@@ -272,3 +272,5 @@ uv run pytest
 uv run ruff check .
 uv run ty check
 ```
+
+If you use an AI coding assistant (Claude Code, Cursor, etc.), see [`AGENTS.md`](AGENTS.md) for a concise, machine-readable orientation to the SDK's layout and conventions.
