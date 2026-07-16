@@ -1,13 +1,11 @@
-"""STL Mesh Import for IonForge 3D BEM.
+"""STL mesh import and export.
 
-Loads triangulated surfaces from STL files and feeds them into BEMSolver3D
-as FlatTriangularPatch panels.
-
+Loads triangulated surfaces from STL files for use as boundary meshes in
+boundary-element simulations, and writes triangle meshes back out to STL.
 Supports both ASCII and binary STL formats.
 
-Requires the ``stl`` extra::
-
-    uv add "ionforge[stl]"
+Works out of the box - STL support depends only on numpy, which is a core
+dependency of the SDK.
 """
 
 from __future__ import annotations
