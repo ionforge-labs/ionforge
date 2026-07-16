@@ -18,7 +18,10 @@ import json
 import sys
 from typing import Any
 
-# Exact paths the SDK covers.
+# Exact paths the SDK covers. Every admitted endpoint is listed explicitly so
+# that a new upstream endpoint under an existing resource (e.g. a future
+# /runs/... surface) does not silently flow into the generated types; adding it
+# to the SDK requires a deliberate edit here.
 ALLOWED_PATHS: frozenset[str] = frozenset(
     {
         "/projects",
@@ -32,11 +35,19 @@ ALLOWED_PATHS: frozenset[str] = frozenset(
         "/models/{modelId}/runs",
         "/models/{modelId}/sweeps",
         "/uploads/presign",
+        "/runs",
+        "/runs/{id}",
+        "/runs/{id}/cancel",
+        "/runs/{runId}/results",
+        "/runs/{runId}/results/{id}/download",
+        "/runs/{runId}/results/{id}/viz",
+        "/sweeps",
+        "/sweeps/{id}",
+        "/sweeps/{id}/aggregate",
+        "/sweeps/{id}/cancel",
+        "/sweeps/{id}/results",
     }
 )
-
-# Path prefixes the SDK covers in full (runs and sweeps sub-resources).
-ALLOWED_PREFIXES: tuple[str, ...] = ("/runs", "/sweeps")
 
 # Object properties the SDK does not cover and therefore strips from every
 # request and response schema. Removing a property here also drops it from any
@@ -46,7 +57,7 @@ STRIPPED_PROPERTIES: frozenset[str] = frozenset({"imageVariant"})
 
 
 def _is_allowed(path: str) -> bool:
-    return path in ALLOWED_PATHS or path.startswith(ALLOWED_PREFIXES)
+    return path in ALLOWED_PATHS
 
 
 def _strip_properties(node: Any) -> None:
