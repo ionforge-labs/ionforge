@@ -32,6 +32,7 @@ Individual checks: `just lint` (ruff), `just format-check`, `just format`,
 ### Package extras
 
 - `client` — the cloud API client (adds `httpx`).
+- `pandas` — DataFrame accessors for sweep/run results (adds `pandas`).
 - `viz-plotly` / `viz-pyvista` — one visualization backend each.
 - `viz` — all visualization backends (matplotlib + plotly + pyvista).
 
@@ -71,6 +72,9 @@ the subpackages:
   methods: `upload_geometry`, `run_simulation`, `run_sweep`,
   `download_results`. Supports run/sweep polling and result pagination. Typed
   exceptions (`APIError`, `AuthenticationError`, `NotFoundError`, ...).
+  Tabular analysis via the `pandas` extra: `sweeps.list_results(...)` returns a
+  `SweepResults` collection with `.to_dataframe()` (one row per point, swept
+  params as dot-path columns), and `runs.to_dataframe(...)` lists runs.
 - `ionforge._types._generated` — request/response and parameter models
   (`ModelParams`, `BeamParams`, `SolverParams`, `IntegratorParams`, ...)
   generated from the public OpenAPI spec. Regenerate with
@@ -96,6 +100,9 @@ the subpackages:
   `ionforge.geometry` / `ionforge.client`, not `import ionforge`.
 - The client needs the `client` extra and an API key: set `IONFORGE_API_KEY`
   (or pass `api_key=`). Optionally override the endpoint with `IONFORGE_BASE_URL`.
+- The DataFrame accessors (`to_dataframe`) need the `pandas` extra; without it
+  they raise `ImportError` naming `ionforge[pandas]`. pandas is imported lazily,
+  so the client itself never requires it.
 - `ionforge/_types/_generated.py` is generated. Change the codegen inputs and
   rerun `just codegen`, never edit the file directly.
 - `Cylinder` has no end caps (it is an open lateral surface). Add `AnnularDisk`

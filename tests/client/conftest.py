@@ -222,5 +222,34 @@ def make_result(**over: object) -> dict[str, object]:
     return body
 
 
+def make_sweep_row(**over: object) -> dict[str, object]:
+    body = {
+        "runId": "run_1",
+        "sweepPoint": {"beam.E_nominal": 1000.0},
+        "status": "completed",
+        "objective": 0.87,
+        "completedAt": TS,
+        "durationSeconds": 12.5,
+        "error": None,
+    }
+    body.update(over)
+    return body
+
+
+def sweep_results_page(
+    rows: list[object],
+    *,
+    next_cursor: str | None = None,
+    total_count: int | None = None,
+    mode: str = "table",
+) -> dict[str, object]:
+    return {
+        "mode": mode,
+        "rows": rows,
+        "nextCursor": next_cursor,
+        "totalCount": total_count if total_count is not None else len(rows),
+    }
+
+
 def page(items: list[object], total: int | None = None) -> dict[str, object]:
     return {"items": items, "total": total if total is not None else len(items)}

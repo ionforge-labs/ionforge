@@ -66,6 +66,7 @@ from ionforge._types._generated import (
 )
 
 from ._config import resolve_config
+from ._dataframe import SweepResults
 from ._exceptions import (
     APIError,
     AuthenticationError,
@@ -471,6 +472,7 @@ __all__ = [
     "Status",
     "Sweep",
     "SweepAxis",
+    "SweepResults",
     "ParamAxis",
     "GeometryAxis",
     # Exceptions

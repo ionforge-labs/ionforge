@@ -260,6 +260,25 @@ with IonForge() as client:  # reads IONFORGE_API_KEY
 
 An `AsyncIonForge` client with the same surface is available for asyncio code.
 
+### Analysing results with pandas
+
+Install the `pandas` extra (`uv add "ionforge[pandas]"`) to pull sweep and run results straight into a DataFrame for analysis and plotting. Sweep results give one row per point, with each swept parameter flattened to its own dot-path column (`beam.E_nominal`) alongside the objective and per-point status:
+
+```python
+with IonForge() as client:
+    # One row per sweep point; auto-paginates across result cursors.
+    results = client.sweeps.list_results(sweep.id, mode="full")
+    df = results.to_dataframe()
+
+    # e.g. transmission vs beam energy
+    df.plot.scatter(x="beam.E_nominal", y="summary.transmission")
+
+    # A tabular view of every run in a project
+    runs_df = client.runs.to_dataframe(project_id=project.id)
+```
+
+In `full` mode, per-point result-summary metrics appear as `summary.*` columns; `table` mode returns just the objective and status. Pass `max_rows=` to cap large pulls.
+
 Simulation runs are configured with `ModelParams` (beam, solver, integrator, and more). Every field — with units, defaults, and conventions — is documented in [`docs/parameters.md`](docs/parameters.md).
 
 See [`examples/run_simulation.py`](examples/run_simulation.py) for a complete, runnable end-to-end workflow that builds an einzel lens, uploads it, runs a simulation, and downloads the results.

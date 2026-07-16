@@ -19,6 +19,7 @@ from ionforge._types._generated import (
     Sweep,
 )
 
+from .._dataframe import SweepResults
 from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from .._transport import AsyncTransport, SyncTransport
@@ -194,6 +195,35 @@ class Sweeps(BaseSyncResource):
         data = self._get(f"/sweeps/{id}/results", params=params)
         return ListSweepResultsResponse.model_validate(data)
 
+    def list_results(
+        self,
+        id: str,
+        *,
+        mode: str = "table",
+        page_size: int = 100,
+        max_rows: int | None = None,
+    ) -> SweepResults:
+        """Fetch all per-point results, auto-paginating across cursors.
+
+        Assembles every page of :meth:`results` into a single
+        :class:`~ionforge.client._dataframe.SweepResults` collection, ready for
+        ``.to_dataframe()``. Set *max_rows* to cap the number of points pulled
+        (guards against unbounded fetches for very large sweeps).
+        """
+        rows: list[Any] = []
+        total_count = 0
+        cursor: str | None = None
+        while True:
+            resp = self.results(id, mode=mode, limit=page_size, cursor=cursor).root
+            rows.extend(resp.rows)
+            total_count = resp.total_count
+            cursor = resp.next_cursor
+            if cursor is None or (max_rows is not None and len(rows) >= max_rows):
+                break
+        if max_rows is not None:
+            rows = rows[:max_rows]
+        return SweepResults(rows=rows, mode=mode, total_count=total_count)
+
     def aggregate(self, id: str) -> GetSweepAggregateResponse:
         """Get the aggregated objective surface and best point for a sweep."""
         data = self._get(f"/sweeps/{id}/aggregate")
@@ -256,6 +286,37 @@ class AsyncSweeps(BaseAsyncResource):
             params["cursor"] = cursor
         data = await self._get(f"/sweeps/{id}/results", params=params)
         return ListSweepResultsResponse.model_validate(data)
+
+    async def list_results(
+        self,
+        id: str,
+        *,
+        mode: str = "table",
+        page_size: int = 100,
+        max_rows: int | None = None,
+    ) -> SweepResults:
+        """Fetch all per-point results, auto-paginating across cursors.
+
+        Assembles every page of :meth:`results` into a single
+        :class:`~ionforge.client._dataframe.SweepResults` collection, ready for
+        ``.to_dataframe()``. Set *max_rows* to cap the number of points pulled
+        (guards against unbounded fetches for very large sweeps).
+        """
+        rows: list[Any] = []
+        total_count = 0
+        cursor: str | None = None
+        while True:
+            resp = (
+                await self.results(id, mode=mode, limit=page_size, cursor=cursor)
+            ).root
+            rows.extend(resp.rows)
+            total_count = resp.total_count
+            cursor = resp.next_cursor
+            if cursor is None or (max_rows is not None and len(rows) >= max_rows):
+                break
+        if max_rows is not None:
+            rows = rows[:max_rows]
+        return SweepResults(rows=rows, mode=mode, total_count=total_count)
 
     async def aggregate(self, id: str) -> GetSweepAggregateResponse:
         """Get the aggregated objective surface and best point for a sweep."""

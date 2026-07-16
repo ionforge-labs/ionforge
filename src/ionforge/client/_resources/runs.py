@@ -13,6 +13,7 @@ from ionforge._types._generated import (
     Status,
 )
 
+from .._dataframe import runs_to_dataframe
 from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from .._transport import AsyncTransport, SyncTransport
@@ -20,6 +21,8 @@ from ._base import BaseAsyncResource, BaseSyncResource
 from ._coerce import to_enum, to_model
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .results import AsyncRunResults, RunResults
 
 
@@ -212,6 +215,29 @@ class Runs(BaseSyncResource):
 
         return RunResults(self._transport, run_id)
 
+    def to_dataframe(
+        self,
+        *,
+        project_id: str | None = None,
+        status: Status | None = None,
+        page_size: int = 25,
+        max_rows: int | None = None,
+    ) -> pd.DataFrame:
+        """Return a DataFrame of runs (one row per run), auto-paginating.
+
+        Projects the tabular fields of each run (id, name, status, simulator
+        type, model/sweep ids, timestamps, error message). Set *max_rows* to
+        cap the number of runs pulled. Requires the ``pandas`` extra.
+        """
+        runs = []
+        for run in self.list_autopaginate(
+            project_id=project_id, status=status, page_size=page_size
+        ):
+            runs.append(run)
+            if max_rows is not None and len(runs) >= max_rows:
+                break
+        return runs_to_dataframe(runs)
+
 
 class AsyncRuns(BaseAsyncResource):
     """Top-level runs resource (cross-model, async)."""
@@ -261,3 +287,26 @@ class AsyncRuns(BaseAsyncResource):
         from .results import AsyncRunResults
 
         return AsyncRunResults(self._transport, run_id)
+
+    async def to_dataframe(
+        self,
+        *,
+        project_id: str | None = None,
+        status: Status | None = None,
+        page_size: int = 25,
+        max_rows: int | None = None,
+    ) -> pd.DataFrame:
+        """Return a DataFrame of runs (one row per run), auto-paginating.
+
+        Projects the tabular fields of each run (id, name, status, simulator
+        type, model/sweep ids, timestamps, error message). Set *max_rows* to
+        cap the number of runs pulled. Requires the ``pandas`` extra.
+        """
+        runs = []
+        async for run in self.list_autopaginate(
+            project_id=project_id, status=status, page_size=page_size
+        ):
+            runs.append(run)
+            if max_rows is not None and len(runs) >= max_rows:
+                break
+        return runs_to_dataframe(runs)
