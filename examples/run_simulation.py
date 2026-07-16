@@ -228,11 +228,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Run did not complete cleanly: {run.error_message}", file=sys.stderr)
             return 1
 
-        # 6. Download the result files.
+        # 6. Download the result files and parse the numbers out of them.
+        from ionforge.client import load_result
+
         print(f"Downloading results into {args.output_dir}/ ...")
         paths = client.download_results(run.id, output_dir=args.output_dir)
         for path in paths:
             print(f"  wrote {path}")
+            data = load_result(path)
+            summary = data.summary
+            if summary.transmission is not None:
+                print(f"    transmission: {summary.transmission:.1%}")
+            eres = summary.energy_resolution
+            if eres and eres.fwhm_eV is not None:
+                print(f"    energy resolution FWHM: {eres.fwhm_eV:.3f} eV")
 
     print("Done.")
     return 0

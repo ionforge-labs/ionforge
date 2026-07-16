@@ -76,6 +76,11 @@ the subpackages:
   `SweepResults` collection with `.to_dataframe()` (one row per point, swept
   params as `param.`-prefixed dot-path columns), and `runs.to_dataframe(...)`
   lists runs.
+- `ionforge.client.results_io` — `load_result(path)` parses a downloaded result
+  file into a `RunResultData` (scalar `.summary`, numpy exit/input arrays,
+  optional `.trajectories`); `.to_dataframe()` and
+  `.transmission_curve_dataframe()` need the `pandas` extra. `client.load_results`
+  downloads and parses in one call.
 - `ionforge._types._generated` — request/response and parameter models
   (`ModelParams`, `BeamParams`, `SolverParams`, `IntegratorParams`, ...)
   generated from the public OpenAPI spec. Regenerate with

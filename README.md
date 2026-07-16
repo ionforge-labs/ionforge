@@ -279,6 +279,33 @@ with IonForge() as client:
 
 In `full` mode, per-point result-summary metrics appear as `summary.*` columns; `table` mode returns just the objective and status. Pass `max_rows=` to cap large pulls.
 
+Downloaded result files parse into numpy arrays and DataFrames with `load_result`. Each result file carries the scalar run metrics (transmission, energy resolution, point spread), the per-particle exit and input arrays, and -- when the run stored them -- per-particle trajectories:
+
+```python
+from ionforge.client import IonForge, load_result
+
+with IonForge() as client:
+    paths = client.download_results(run.id, output_dir="results/")
+    data = load_result(paths[0])
+
+    print(f"transmission: {data.summary.transmission:.1%}")
+    if data.summary.energy_resolution:
+        print(f"energy resolution FWHM: {data.summary.energy_resolution.fwhm_eV:.3f} eV")
+
+    # Per-particle numbers as numpy arrays.
+    exit_energy_spread = data.exit_energies.std()
+
+    # A per-particle frame (input array covers all launched particles, exit
+    # arrays only the transmitted ones, so equal lengths give one frame and
+    # unequal lengths give a {"particles", "exits"} pair of frames).
+    frames = data.to_dataframe()
+
+    # The energy-transmission curve, when present.
+    curve = data.transmission_curve_dataframe()
+```
+
+`client.load_results(run.id, output_dir="results/")` downloads and parses in one call, returning a `RunResultData` per file.
+
 Simulation runs are configured with `ModelParams` (beam, solver, integrator, and more). Every field — with units, defaults, and conventions — is documented in [`docs/parameters.md`](docs/parameters.md).
 
 See [`examples/run_simulation.py`](examples/run_simulation.py) for a complete, runnable end-to-end workflow that builds an einzel lens, uploads it, runs a simulation, and downloads the results.
