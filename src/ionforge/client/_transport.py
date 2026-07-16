@@ -92,12 +92,18 @@ def _backoff_delay(attempt: int, retry_after: float | None) -> float:
 class SyncTransport:
     """Synchronous HTTP transport with retry and error mapping."""
 
-    def __init__(self, config: ClientConfig) -> None:
+    def __init__(
+        self,
+        config: ClientConfig,
+        *,
+        http_transport: httpx.BaseTransport | None = None,
+    ) -> None:
         self._config = config
         self._client = httpx.Client(
             base_url=config.base_url.rstrip("/") + "/v1",
             headers=_build_headers(config),
             timeout=config.timeout,
+            transport=http_transport,
         )
 
     def request(
@@ -147,12 +153,18 @@ class SyncTransport:
 class AsyncTransport:
     """Asynchronous HTTP transport with retry and error mapping."""
 
-    def __init__(self, config: ClientConfig) -> None:
+    def __init__(
+        self,
+        config: ClientConfig,
+        *,
+        http_transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self._config = config
         self._client = httpx.AsyncClient(
             base_url=config.base_url.rstrip("/") + "/v1",
             headers=_build_headers(config),
             timeout=config.timeout,
+            transport=http_transport,
         )
 
     async def request(

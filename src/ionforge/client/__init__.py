@@ -115,6 +115,7 @@ class IonForge:
         base_url: str | None = None,
         timeout: float | None = None,
         max_retries: int | None = None,
+        _http_transport: _httpx.BaseTransport | None = None,
     ) -> None:
         config = resolve_config(
             api_key=api_key,
@@ -124,7 +125,7 @@ class IonForge:
             timeout=timeout,
             max_retries=max_retries,
         )
-        self._transport = SyncTransport(config)
+        self._transport = SyncTransport(config, http_transport=_http_transport)
 
         self.projects = Projects(self._transport)
         self.geometries = Geometries(self._transport)
@@ -283,6 +284,7 @@ class AsyncIonForge:
         base_url: str | None = None,
         timeout: float | None = None,
         max_retries: int | None = None,
+        _http_transport: _httpx.AsyncBaseTransport | None = None,
     ) -> None:
         config = resolve_config(
             api_key=api_key,
@@ -292,7 +294,7 @@ class AsyncIonForge:
             timeout=timeout,
             max_retries=max_retries,
         )
-        self._transport = AsyncTransport(config)
+        self._transport = AsyncTransport(config, http_transport=_http_transport)
 
         self.projects = AsyncProjects(self._transport)
         self.geometries = AsyncGeometries(self._transport)
