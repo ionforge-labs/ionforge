@@ -183,6 +183,77 @@ class TestConsistencyValidation:
         assert any("g_phantom" in e for e in errors)
 
 
+class TestStructuralValidation:
+    def test_face_with_one_vertex_flagged(self):
+        data = _valid_geometry()
+        data["faces"][0]["vertexIds"] = ["v0"]
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("f0" in e and "fewer than 2 vertices" in e for e in errors)
+
+    def test_face_with_zero_vertices_flagged(self):
+        data = _valid_geometry()
+        data["faces"][0]["vertexIds"] = []
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("f0" in e and "fewer than 2 vertices" in e for e in errors)
+
+    def test_two_vertex_face_allowed_for_axisymmetric(self):
+        # 2-vertex line-segment faces are legitimate in R-Z cross-section mode
+        # (commit f6e1a29 relaxed the minimum from 3 to 2).
+        data = _valid_geometry(symmetry="axisymmetric")
+        data["faces"][0]["vertexIds"] = ["v0", "v1"]
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert not any("fewer than 2 vertices" in e for e in errors)
+
+    def test_vertex_position_wrong_length_flagged(self):
+        data = _valid_geometry()
+        data["vertices"][1]["position"] = [0.1, 0.0]
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("v1" in e and "3 numeric values" in e for e in errors)
+
+    def test_vertex_position_non_numeric_flagged(self):
+        data = _valid_geometry()
+        data["vertices"][0]["position"] = ["x", "y", "z"]
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("v0" in e and "3 numeric values" in e for e in errors)
+
+    def test_bounding_box_size_wrong_length_flagged(self):
+        data = _valid_geometry()
+        data["boundingBox"]["size"] = [0.2, 0.2]
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("boundingBox size" in e and "3 numeric values" in e for e in errors)
+
+    def test_edge_null_face_ids_flagged(self):
+        data = _valid_geometry()
+        data["edges"][0]["faceIds"] = None
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("e0" in e and "null faceIds" in e for e in errors)
+
+    def test_group_null_face_ids_flagged(self):
+        data = _valid_geometry()
+        data["groups"][0]["faceIds"] = None
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("plate" in e and "null faceIds" in e for e in errors)
+
+    def test_group_null_edge_ids_flagged(self):
+        data = _valid_geometry()
+        data["groups"][0]["edgeIds"] = None
+        geo = SerializedGeometry.model_validate(data)
+        errors = geo.validate_consistency()
+        assert any("plate" in e and "null edgeIds" in e for e in errors)
+
+    def test_valid_geometry_passes_structural_checks(self):
+        geo = SerializedGeometry.model_validate(_valid_geometry())
+        assert geo.validate_consistency() == []
+
+
 class TestEdgeIds:
     def test_group_with_edge_ids_parses(self):
         data = _valid_geometry()
