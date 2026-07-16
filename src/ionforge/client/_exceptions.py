@@ -32,27 +32,27 @@ class APIError(Exception):
 
 
 class AuthenticationError(APIError):
-    """Raised on HTTP 401 — invalid or missing credentials."""
+    """Raised on HTTP 401: invalid or missing credentials."""
 
 
 class PermissionDeniedError(APIError):
-    """Raised on HTTP 403 — valid credentials but insufficient access."""
+    """Raised on HTTP 403: valid credentials but insufficient access."""
 
 
 class NotFoundError(APIError):
-    """Raised on HTTP 404 — resource does not exist."""
+    """Raised on HTTP 404: resource does not exist."""
 
 
 class BadRequestError(APIError):
-    """Raised on HTTP 400 — malformed request or validation failure."""
+    """Raised on HTTP 400: malformed request or validation failure."""
 
 
 class ConflictError(APIError):
-    """Raised on HTTP 409 — resource conflict (e.g. deletion blocked by dependents)."""
+    """Raised on HTTP 409: resource conflict (e.g. deletion blocked by dependents)."""
 
 
 class RateLimitError(APIError):
-    """Raised on HTTP 429 — too many requests."""
+    """Raised on HTTP 429: too many requests."""
 
     retry_after: float | None
 
@@ -69,7 +69,7 @@ class RateLimitError(APIError):
 
 
 class InternalServerError(APIError):
-    """Raised on HTTP 5xx — server-side failure."""
+    """Raised on HTTP 5xx: server-side failure."""
 
 
 class ConnectionError(APIError):

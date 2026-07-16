@@ -290,8 +290,9 @@ with IonForge() as client:
 
     if data.summary.transmission is not None:
         print(f"transmission: {data.summary.transmission:.1%}")
-    if data.summary.energy_resolution:
-        print(f"energy resolution FWHM: {data.summary.energy_resolution.fwhm_eV:.3f} eV")
+    eres = data.summary.energy_resolution
+    if eres is not None and eres.fwhm_eV is not None:
+        print(f"energy resolution FWHM: {eres.fwhm_eV:.3f} eV")
 
     # Per-particle numbers as numpy arrays.
     exit_energy_spread = data.exit_energies.std()
@@ -307,7 +308,7 @@ with IonForge() as client:
 
 `client.load_results(run.id, output_dir="results/")` downloads and parses in one call, returning a `RunResultData` per file.
 
-Simulation runs are configured with `ModelParams` (beam, solver, integrator, and more). Every field — with units, defaults, and conventions — is documented in [`docs/parameters.md`](docs/parameters.md).
+Simulation runs are configured with `ModelParams` (beam, solver, integrator, and more). Every field, with its units, defaults, and conventions, is documented in [`docs/parameters.md`](docs/parameters.md).
 
 See [`examples/run_simulation.py`](examples/run_simulation.py) for a complete, runnable end-to-end workflow that builds an einzel lens, uploads it, runs a simulation, and downloads the results.
 

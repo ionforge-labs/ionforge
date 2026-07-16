@@ -31,10 +31,10 @@ Individual checks: `just lint` (ruff), `just format-check`, `just format`,
 
 ### Package extras
 
-- `client` — the cloud API client (adds `httpx`).
-- `pandas` — DataFrame accessors for sweep/run results (adds `pandas`).
-- `viz-plotly` / `viz-pyvista` — one visualization backend each.
-- `viz` — all visualization backends (matplotlib + plotly + pyvista).
+- `client`: the cloud API client (adds `httpx`).
+- `pandas`: DataFrame accessors for sweep/run results (adds `pandas`).
+- `viz-plotly` / `viz-pyvista`: one visualization backend each.
+- `viz`: all visualization backends (matplotlib + plotly + pyvista).
 
 Matplotlib visualization needs no extra when installed via `dev`; for a plain
 install, use one of the `viz*` extras.
@@ -57,17 +57,17 @@ install, use one of the `viz*` extras.
 
 ## Package map
 
-No top-level `ionforge` import surface — it is a namespace package. Import from
+No top-level `ionforge` import surface; it is a namespace package. Import from
 the subpackages:
 
-- `ionforge.geometry` — `Geometry` builder (`add`, `to_serialized_geometry`,
+- `ionforge.geometry`: `Geometry` builder (`add`, `to_serialized_geometry`,
   and `SerializedGeometry.validate_consistency()` on the result); primitives
   `Cylinder`, `AnnularDisk`, `Cone`, `Sphere`; serialization models `SerializedGeometry`,
   `BoundingBox`, `Vertex`, `Edge`, `Face`, `Group`, `Symmetry`, `Vec3`; STL I/O
   in `ionforge.geometry.stl_import` (`load_stl`, `mesh_stats`, `write_stl`);
   3-D rendering in `ionforge.geometry.visualization` (`render`, or
   `geo.visualize(...)`).
-- `ionforge.client` — `IonForge` and `AsyncIonForge` clients. Resources:
+- `ionforge.client`: `IonForge` and `AsyncIonForge` clients. Resources:
   `projects`, `geometries`, `models`, `runs`, `sweeps`, `uploads`. Convenience
   methods: `upload_geometry`, `run_simulation`, `run_sweep`,
   `download_results`. Supports run/sweep polling and result pagination. Typed
@@ -76,30 +76,30 @@ the subpackages:
   `SweepResults` collection with `.to_dataframe()` (one row per point, swept
   params as `param.`-prefixed dot-path columns), and `runs.to_dataframe(...)`
   lists runs.
-- `ionforge.client.results_io` — `load_result(path)` parses a downloaded result
+- `ionforge.client.results_io`: `load_result(path)` parses a downloaded result
   file into a `RunResultData` (scalar `.summary`, numpy exit/input arrays,
   optional `.trajectories`); stable `.particles_dataframe()` /
   `.exits_dataframe()` accessors (fixed shape), the adaptive `.to_dataframe()`,
   and `.transmission_curve_dataframe()` need the `pandas` extra.
   `client.load_results` downloads and parses in one call.
-- `ionforge._types._generated` — request/response and parameter models
+- `ionforge._types._generated`: request/response and parameter models
   (`ModelParams`, `BeamParams`, `SolverParams`, `IntegratorParams`, ...)
   generated from the public OpenAPI spec. Regenerate with
   `just codegen <spec>`; do not hand-edit this file.
 
 ## Pointers
 
-- `README.md` — quickstart and worked snippets for every feature.
-- `docs/parameters.md` — full simulation parameter reference (types, defaults,
+- `README.md`: quickstart and worked snippets for every feature.
+- `docs/parameters.md`: full simulation parameter reference (types, defaults,
   units, physical meaning).
-- `examples/` — each runnable via `just example <name>`:
-  - `build_geometry` — assemble a lens column from primitives.
-  - `stl_round_trip` — load an STL, inspect mesh quality, re-export.
-  - `json_round_trip` — serialize geometry to/from JSON.
-  - `export_schema` — emit the JSON Schema for `SerializedGeometry`.
-  - `visualize_geometry` — CLI viewer with `--backend`/`--color-by`.
-  - `viz_matplotlib` / `viz_plotly` / `viz_pyvista` — one backend each.
-  - `run_simulation` — end-to-end: build, upload, run, download results.
+- `examples/`: each runnable via `just example <name>`:
+  - `build_geometry`: assemble a lens column from primitives.
+  - `stl_round_trip`: load an STL, inspect mesh quality, re-export.
+  - `json_round_trip`: serialize geometry to/from JSON.
+  - `export_schema`: emit the JSON Schema for `SerializedGeometry`.
+  - `visualize_geometry`: CLI viewer with `--backend`/`--color-by`.
+  - `viz_matplotlib` / `viz_plotly` / `viz_pyvista`: one backend each.
+  - `run_simulation`: end-to-end build, upload, run, download results.
 
 ## Common pitfalls
 
