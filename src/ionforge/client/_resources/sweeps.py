@@ -210,11 +210,16 @@ class Sweeps(BaseSyncResource):
         ``.to_dataframe()``. Set *max_rows* to cap the number of points pulled
         (guards against unbounded fetches for very large sweeps).
         """
+        if max_rows is not None and max_rows <= 0:
+            return SweepResults(rows=[], mode=mode, total_count=0)
         rows: list[Any] = []
         total_count = 0
         cursor: str | None = None
         while True:
-            resp = self.results(id, mode=mode, limit=page_size, cursor=cursor).root
+            limit = page_size
+            if max_rows is not None:
+                limit = min(page_size, max_rows - len(rows))
+            resp = self.results(id, mode=mode, limit=limit, cursor=cursor).root
             rows.extend(resp.rows)
             total_count = resp.total_count
             cursor = resp.next_cursor
@@ -302,13 +307,16 @@ class AsyncSweeps(BaseAsyncResource):
         ``.to_dataframe()``. Set *max_rows* to cap the number of points pulled
         (guards against unbounded fetches for very large sweeps).
         """
+        if max_rows is not None and max_rows <= 0:
+            return SweepResults(rows=[], mode=mode, total_count=0)
         rows: list[Any] = []
         total_count = 0
         cursor: str | None = None
         while True:
-            resp = (
-                await self.results(id, mode=mode, limit=page_size, cursor=cursor)
-            ).root
+            limit = page_size
+            if max_rows is not None:
+                limit = min(page_size, max_rows - len(rows))
+            resp = (await self.results(id, mode=mode, limit=limit, cursor=cursor)).root
             rows.extend(resp.rows)
             total_count = resp.total_count
             cursor = resp.next_cursor

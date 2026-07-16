@@ -104,7 +104,11 @@ async def async_poll_run(
     interval: float = 2.0,
     timeout: float = 600.0,
 ) -> Run:
-    """Async version of :func:`poll_run`."""
+    """Async version of :func:`poll_run`.
+
+    Raises ``TimeoutError`` if the run does not finish within *timeout* seconds,
+    and ``ValueError`` if *interval* is not positive.
+    """
     return await _async_poll(
         lambda: runs.get(run_id),
         lambda run: run.status,
@@ -144,7 +148,11 @@ async def async_poll_sweep(
     interval: float = 5.0,
     timeout: float = 3600.0,
 ) -> Sweep:
-    """Async version of :func:`poll_sweep`."""
+    """Async version of :func:`poll_sweep`.
+
+    Raises ``TimeoutError`` if the sweep does not finish within *timeout*
+    seconds, and ``ValueError`` if *interval* is not positive.
+    """
     return await _async_poll(
         lambda: sweeps.get(sweep_id),
         lambda sweep: sweep.status,

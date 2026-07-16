@@ -151,6 +151,37 @@ def test_sweep_list_results_respects_max_rows() -> None:
     assert len(router.requests) == 1
 
 
+def test_sweep_list_results_caps_requested_limit_to_remaining() -> None:
+    seen_limits: list[int] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen_limits.append(int(req.url.params["limit"]))
+        return httpx.Response(
+            200,
+            json=sweep_results_page(
+                [make_sweep_row(runId="a"), make_sweep_row(runId="b")],
+                next_cursor="cursor_2",
+                total_count=10,
+            ),
+        )
+
+    router = Router().add("GET", r"/v1/sweeps/swp_1/results", handler)
+    make_client(router).sweeps.list_results("swp_1", page_size=2, max_rows=3)
+    # The second page requests only the remaining row, never a full page over
+    # the cap: min(page_size, max_rows - len(rows)) = min(2, 3 - 2) = 1.
+    assert seen_limits == [2, 1]
+
+
+def test_sweep_list_results_max_rows_zero_makes_no_request() -> None:
+    router = Router().json(
+        "GET", r"/v1/sweeps/swp_1/results", sweep_results_page([make_sweep_row()])
+    )
+    results = make_client(router).sweeps.list_results("swp_1", max_rows=0)
+    assert len(results) == 0
+    # A zero cap short-circuits before any request is sent.
+    assert router.requests == []
+
+
 def test_sweep_to_dataframe_empty_has_base_columns() -> None:
     router = Router().json("GET", r"/v1/sweeps/swp_1/results", sweep_results_page([]))
     df = make_client(router).sweeps.list_results("swp_1").to_dataframe()
