@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -214,37 +215,51 @@ class SyncTransport:
         retryable statuses and connection errors back off and retry, and any
         terminal failure is mapped to the typed exception hierarchy. Redirects
         are followed and the configured timeout is honoured.
+
+        Bytes land in a sibling ``.part`` temp file that is atomically renamed
+        onto *dest* only once the stream completes, so a mid-stream failure never
+        leaves a truncated result file behind. A retry reopens the temp in write
+        mode, discarding any partial bytes from the prior attempt, and the temp
+        is removed if the download ultimately fails.
         """
+        tmp = dest.with_suffix(dest.suffix + ".part")
         attempt = 0
-        while True:
-            try:
-                with self._stream_client.stream("GET", url) as response:
-                    if _should_retry(
-                        "GET",
-                        response.status_code,
-                        attempt,
-                        self._config.max_retries,
+        try:
+            while True:
+                try:
+                    with self._stream_client.stream("GET", url) as response:
+                        if _should_retry(
+                            "GET",
+                            response.status_code,
+                            attempt,
+                            self._config.max_retries,
+                        ):
+                            time.sleep(
+                                _backoff_delay(
+                                    attempt, _retry_after_for_status(response)
+                                )
+                            )
+                            attempt += 1
+                            continue
+                        if not response.is_success:
+                            response.read()
+                            _raise_for_status(response)
+                        with open(tmp, "wb") as f:
+                            for chunk in response.iter_bytes():
+                                f.write(chunk)
+                    os.replace(tmp, dest)
+                    return
+                except httpx.HTTPError as exc:
+                    if _should_retry_transport_error(
+                        "GET", exc, attempt, self._config.max_retries
                     ):
-                        time.sleep(
-                            _backoff_delay(attempt, _retry_after_for_status(response))
-                        )
+                        time.sleep(_backoff_delay(attempt, None))
                         attempt += 1
                         continue
-                    if not response.is_success:
-                        response.read()
-                        _raise_for_status(response)
-                    with open(dest, "wb") as f:
-                        for chunk in response.iter_bytes():
-                            f.write(chunk)
-                return
-            except httpx.HTTPError as exc:
-                if _should_retry_transport_error(
-                    "GET", exc, attempt, self._config.max_retries
-                ):
-                    time.sleep(_backoff_delay(attempt, None))
-                    attempt += 1
-                    continue
-                raise ConnectionError(str(exc)) from exc
+                    raise ConnectionError(str(exc)) from exc
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
 
     def close(self) -> None:
         self._stream_client.close()
@@ -325,37 +340,51 @@ class AsyncTransport:
         The async counterpart of :meth:`SyncTransport.stream_to_file`: same
         idempotent-GET retry policy, redirect following, configured timeout, and
         typed-exception mapping. Callers bound concurrency across many of these.
+
+        As in the sync path, bytes land in a sibling ``.part`` temp file that is
+        atomically renamed onto *dest* only once the stream completes, so a
+        mid-stream failure never leaves a truncated result file behind. A retry
+        reopens the temp in write mode, discarding any partial bytes from the
+        prior attempt, and the temp is removed if the download ultimately fails.
         """
+        tmp = dest.with_suffix(dest.suffix + ".part")
         attempt = 0
-        while True:
-            try:
-                async with self._stream_client.stream("GET", url) as response:
-                    if _should_retry(
-                        "GET",
-                        response.status_code,
-                        attempt,
-                        self._config.max_retries,
+        try:
+            while True:
+                try:
+                    async with self._stream_client.stream("GET", url) as response:
+                        if _should_retry(
+                            "GET",
+                            response.status_code,
+                            attempt,
+                            self._config.max_retries,
+                        ):
+                            await asyncio.sleep(
+                                _backoff_delay(
+                                    attempt, _retry_after_for_status(response)
+                                )
+                            )
+                            attempt += 1
+                            continue
+                        if not response.is_success:
+                            await response.aread()
+                            _raise_for_status(response)
+                        with open(tmp, "wb") as f:
+                            async for chunk in response.aiter_bytes():
+                                f.write(chunk)
+                    os.replace(tmp, dest)
+                    return
+                except httpx.HTTPError as exc:
+                    if _should_retry_transport_error(
+                        "GET", exc, attempt, self._config.max_retries
                     ):
-                        await asyncio.sleep(
-                            _backoff_delay(attempt, _retry_after_for_status(response))
-                        )
+                        await asyncio.sleep(_backoff_delay(attempt, None))
                         attempt += 1
                         continue
-                    if not response.is_success:
-                        await response.aread()
-                        _raise_for_status(response)
-                    with open(dest, "wb") as f:
-                        async for chunk in response.aiter_bytes():
-                            f.write(chunk)
-                return
-            except httpx.HTTPError as exc:
-                if _should_retry_transport_error(
-                    "GET", exc, attempt, self._config.max_retries
-                ):
-                    await asyncio.sleep(_backoff_delay(attempt, None))
-                    attempt += 1
-                    continue
-                raise ConnectionError(str(exc)) from exc
+                    raise ConnectionError(str(exc)) from exc
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
 
     async def close(self) -> None:
         await self._stream_client.aclose()

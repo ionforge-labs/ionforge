@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 
 import httpx
 import pytest
@@ -11,6 +12,7 @@ from ionforge._types._generated import Deleted
 from ionforge.client import BeamParams, ModelParams, SolverParams
 from ionforge.client._resources._base import _serialize
 from ionforge.client._resources.uploads import MAX_UPLOAD_SIZE_BYTES
+from ionforge.geometry import Geometry
 
 from .conftest import (
     Router,
@@ -45,6 +47,51 @@ def test_serialize_pins_literal_constant_and_restores_fields_set() -> None:
     # And the caller's model is left untouched: pinning was reverted in place,
     # with no deep copy of the (possibly huge) model tree.
     assert "deleted" not in model.__pydantic_fields_set__
+
+
+def test_serialize_is_thread_safe_for_a_shared_model(
+    einzel_geometry: Geometry,
+) -> None:
+    """One model instance serialised from many threads always keeps its
+    constants.
+
+    The old implementation mutated ``__pydantic_fields_set__`` before each dump
+    and restored it afterwards. Under concurrency, one thread's restore could
+    drop a pin another thread was mid-dump relying on, so the body would come
+    back missing wire constants such as ``version``/``units``. The dump-then-
+    inject design only ever reads the model, so a shared instance is safe.
+    """
+    model = einzel_geometry.to_serialized_geometry()
+    # These single-value Literal constants are built from defaults, so they are
+    # absent from the sparse dump and must be injected on every serialisation.
+    assert "version" not in model.__pydantic_fields_set__
+    assert "units" not in model.__pydantic_fields_set__
+
+    bodies: list[dict] = []
+    errors: list[BaseException] = []
+    barrier = threading.Barrier(8)
+
+    def worker() -> None:
+        try:
+            barrier.wait()
+            for _ in range(200):
+                bodies.append(_serialize(model))
+        except BaseException as exc:  # noqa: BLE001 - surfaced to the assertion
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(bodies) == 8 * 200
+    # Every body carries the pinned constants, with no torn dump missing them.
+    assert all(body["version"] == 1 and body["units"] == "m" for body in bodies)
+    # The shared model is never mutated by serialisation.
+    assert "version" not in model.__pydantic_fields_set__
+    assert "units" not in model.__pydantic_fields_set__
 
 
 # --- projects --------------------------------------------------------------

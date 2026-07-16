@@ -460,7 +460,18 @@ class AsyncIonForge:
                 await self._transport.stream_to_file(url, dest)
             return dest
 
-        return list(await asyncio.gather(*(_stream(dest, url) for dest, url in jobs)))
+        tasks = [asyncio.ensure_future(_stream(dest, url)) for dest, url in jobs]
+        try:
+            # A bare gather propagates the first child's typed exception at once
+            # but leaves its siblings running as orphans. On any failure, cancel
+            # the outstanding downloads and await their unwind before surfacing
+            # the original error, so no download outlives this call.
+            return list(await asyncio.gather(*tasks))
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     async def load_results(
         self,

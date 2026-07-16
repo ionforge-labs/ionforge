@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ionforge.client import BeamParams, ModelParams, SolverParams
+from ionforge.client import BeamParams, ModelParams, NotFoundError, SolverParams
 from ionforge.client import _polling as polling_mod
 
 from .conftest import (
@@ -213,3 +213,68 @@ def test_download_results_async_concurrent_writes_correct_files(tmp_path: Path) 
     for i, path in enumerate(paths):
         assert path.name == f"result-res_{i}"
         assert path.read_bytes() == f"body-res_{i}".encode()
+
+
+def test_download_results_async_cancels_siblings_on_first_failure(
+    tmp_path: Path,
+) -> None:
+    """A single failed download cancels the outstanding ones and raises the
+    original typed exception - no download outlives the call as an orphan.
+
+    A plain ``asyncio.gather`` propagates the first child's exception but leaves
+    its siblings running; here the streams are driven through a controlled fake
+    so that one fails immediately while the rest are still in flight, and the
+    test asserts every sibling received a ``CancelledError`` rather than being
+    left to complete (or leak a warning) after the call returned.
+    """
+    results = [make_result(id=f"res_{i}") for i in range(5)]
+    router = (
+        Router()
+        .json("GET", r"/v1/runs/run_1/results", page(results))
+        .add(
+            "GET",
+            r"/v1/runs/run_1/results/res_\d+/download",
+            lambda req: httpx.Response(
+                200,
+                json={
+                    "url": f"https://files.example.com/results/{req.url.path.split('/')[-2]}"
+                },
+            ),
+        )
+    )
+
+    started: list[str] = []
+    cancelled: list[str] = []
+    completed: list[str] = []
+
+    async def fake_stream(url: str, dest: Path) -> None:
+        started.append(url)
+        if url.endswith("res_0"):
+            # The first result's download fails terminally.
+            raise NotFoundError("gone", status_code=404, body=None)
+        try:
+            # The siblings are still streaming when the failure surfaces.
+            await asyncio.sleep(30)
+            completed.append(url)
+        except asyncio.CancelledError:
+            cancelled.append(url)
+            raise
+
+    async def go() -> None:
+        client = make_async_client(router)
+        client._transport.stream_to_file = fake_stream  # type: ignore[method-assign]
+        try:
+            with pytest.raises(NotFoundError):
+                await client.download_results("run_1", output_dir=tmp_path)
+        finally:
+            await client.close()
+
+    asyncio.run(go())
+
+    # The four siblings were all cancelled; none ran to completion as an orphan.
+    assert sorted(cancelled) == [
+        f"https://files.example.com/results/res_{i}" for i in range(1, 5)
+    ]
+    assert completed == []
+    # No result files were left behind by the aborted download batch.
+    assert list(tmp_path.iterdir()) == []

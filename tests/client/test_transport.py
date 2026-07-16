@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import httpx
@@ -363,6 +364,47 @@ def test_stream_to_file_retries_on_503(_no_sleep: list[float], tmp_path: Path) -
     client._transport.stream_to_file("https://files.example.com/f", dest)
     assert calls["n"] == 2
     assert dest.read_bytes() == b"ok"
+
+
+def test_stream_to_file_success_leaves_only_complete_dest(tmp_path: Path) -> None:
+    router = Router().add(
+        "GET", r"/f", lambda _r: httpx.Response(200, content=b"complete-payload")
+    )
+    client = make_client(router)
+    dest = tmp_path / "result.h5"
+    client._transport.stream_to_file("https://files.example.com/f", dest)
+    # The finished file is present with its full contents and no ``.part`` residue.
+    assert dest.read_bytes() == b"complete-payload"
+    assert [p.name for p in tmp_path.iterdir()] == ["result.h5"]
+
+
+def test_stream_to_file_terminal_status_leaves_no_file(tmp_path: Path) -> None:
+    router = Router().add(
+        "GET", r"/missing", lambda _r: httpx.Response(404, json={"message": "gone"})
+    )
+    client = make_client(router, max_retries=0)
+    dest = tmp_path / "result.h5"
+    with pytest.raises(NotFoundError):
+        client._transport.stream_to_file("https://files.example.com/missing", dest)
+    # No dest and no ``.part`` temp are left behind on a terminal HTTP error.
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_stream_to_file_midstream_failure_leaves_no_file(
+    _no_sleep: list[float], tmp_path: Path
+) -> None:
+    def body() -> Iterator[bytes]:
+        yield b"partial-bytes-"
+        raise httpx.ReadError("connection dropped mid-stream")
+
+    router = Router().add("GET", r"/f", lambda _r: httpx.Response(200, content=body()))
+    client = make_client(router, max_retries=0)
+    dest = tmp_path / "result.h5"
+    with pytest.raises(ConnectionError):
+        client._transport.stream_to_file("https://files.example.com/f", dest)
+    # A failure after some bytes were written must leave neither a truncated
+    # dest file nor the ``.part`` temp.
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_non_numeric_retry_after_is_ignored(_no_sleep: list[float]) -> None:
