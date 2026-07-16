@@ -31,6 +31,22 @@ _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 _RETRYABLE_METHODS = {"GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 
 
+def _parse_retry_after(raw: str | None) -> float | None:
+    """Parse a ``Retry-After`` header value into seconds.
+
+    The header may carry either a number of seconds or an HTTP-date
+    (RFC 1123). Only the numeric form is honoured; anything non-numeric
+    (including a date) is treated as absent so the caller falls back to
+    exponential backoff instead of crashing.
+    """
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
 def _build_headers(config: ClientConfig) -> dict[str, str]:
     headers: dict[str, str] = {
         "Authorization": config.auth_header,
@@ -60,8 +76,7 @@ def _raise_for_status(response: httpx.Response) -> None:
     exc_cls = _exception_for_status(response.status_code)
 
     if exc_cls is RateLimitError:
-        retry_after_raw = response.headers.get("retry-after")
-        retry_after = float(retry_after_raw) if retry_after_raw else None
+        retry_after = _parse_retry_after(response.headers.get("retry-after"))
         raise RateLimitError(
             message,
             status_code=response.status_code,
@@ -134,8 +149,9 @@ class SyncTransport:
             ):
                 retry_after = None
                 if response.status_code == 429:
-                    raw = response.headers.get("retry-after")
-                    retry_after = float(raw) if raw else None
+                    retry_after = _parse_retry_after(
+                        response.headers.get("retry-after")
+                    )
                 time.sleep(_backoff_delay(attempt, retry_after))
                 attempt += 1
                 continue
@@ -199,8 +215,9 @@ class AsyncTransport:
             ):
                 retry_after = None
                 if response.status_code == 429:
-                    raw = response.headers.get("retry-after")
-                    retry_after = float(raw) if raw else None
+                    retry_after = _parse_retry_after(
+                        response.headers.get("retry-after")
+                    )
                 await asyncio.sleep(_backoff_delay(attempt, retry_after))
                 attempt += 1
                 continue

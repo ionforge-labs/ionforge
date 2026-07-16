@@ -9,6 +9,7 @@ from ionforge.client import (
     APIError,
     AuthenticationError,
     BadRequestError,
+    ConnectionError,
     InternalServerError,
     NotFoundError,
     PermissionDeniedError,
@@ -139,6 +140,9 @@ def test_error_status_maps_to_typed_exception(status: int, exc: type[APIError]) 
     client = make_client(router, max_retries=0)
     with pytest.raises(exc) as info:
         client.projects.get("proj_1")
+    # Exact type, not a subclass: the 422 row must land on the generic
+    # APIError, not silently on some narrower subclass.
+    assert type(info.value) is exc
     assert info.value.status_code == status
     assert info.value.message == "boom"
 
@@ -155,3 +159,76 @@ def test_rate_limit_error_exposes_retry_after() -> None:
     with pytest.raises(RateLimitError) as info:
         client.projects.get("proj_1")
     assert info.value.retry_after == 3.0
+
+
+def test_get_retries_are_exhausted_then_raises(_no_sleep: list[float]) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(503, json={"message": "still down"})
+
+    max_retries = 3
+    client = make_client(
+        Router().add("GET", r"/v1/projects/proj_1", handler),
+        max_retries=max_retries,
+    )
+    with pytest.raises(InternalServerError):
+        client.projects.get("proj_1")
+    # One initial attempt plus one per retry.
+    assert calls["n"] == max_retries + 1
+
+
+def test_connect_error_retries_then_raises_connection_error(
+    _no_sleep: list[float],
+) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        raise httpx.ConnectError("connection refused")
+
+    max_retries = 2
+    client = make_client(
+        Router().add("GET", r"/v1/projects/proj_1", handler),
+        max_retries=max_retries,
+    )
+    with pytest.raises(ConnectionError):
+        client.projects.get("proj_1")
+    # Transport error is retried before the typed ConnectionError surfaces.
+    assert calls["n"] == max_retries + 1
+    assert len(_no_sleep) == max_retries
+
+
+def test_non_json_error_body_falls_back_to_text() -> None:
+    router = Router().add(
+        "GET",
+        r"/v1/projects/proj_1",
+        lambda _req: httpx.Response(500, text="<html>oops"),
+    )
+    client = make_client(router, max_retries=0)
+    with pytest.raises(InternalServerError) as info:
+        client.projects.get("proj_1")
+    # No JSON body to read a message from, so the raw text is used.
+    assert info.value.message == "<html>oops"
+
+
+def test_non_numeric_retry_after_is_ignored(_no_sleep: list[float]) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(
+                429,
+                json={"message": "slow"},
+                headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"},
+            )
+        return httpx.Response(200, json=make_project_with_counts())
+
+    client = make_client(Router().add("GET", r"/v1/projects/proj_1", handler))
+    # An RFC-1123 date form must not crash; it is treated as absent so the
+    # backoff falls through to the exponential schedule.
+    client.projects.get("proj_1")
+    assert calls["n"] == 2
+    assert _no_sleep == [transport_mod._backoff_delay(0, None)]

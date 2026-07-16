@@ -49,10 +49,19 @@ def test_projects_create_excludes_none() -> None:
 
 
 def test_projects_get_hits_id_path() -> None:
-    router = Router().json("GET", r"/v1/projects/proj_9", make_project_with_counts())
+    router = Router().add(
+        "GET",
+        r"/v1/projects/[^/]+",
+        lambda req: httpx.Response(
+            200,
+            json=make_project_with_counts(id=req.url.path.rsplit("/", 1)[-1]),
+        ),
+    )
     proj = make_client(router).projects.get("proj_9")
     assert router.last.url.path == "/v1/projects/proj_9"
-    assert proj.id == "proj_1"
+    # The response echoes the id from the path, so this proves the client
+    # routed the get to proj_9 rather than a hard-coded fixture id.
+    assert proj.id == "proj_9"
 
 
 def test_projects_list_sends_pagination_params() -> None:
@@ -108,9 +117,19 @@ def test_models_create_serializes_params_camelcase() -> None:
 
 
 def test_models_get_returns_counts() -> None:
-    router = Router().json("GET", r"/v1/models/mdl_1", make_model_with_counts())
+    router = Router().add(
+        "GET",
+        r"/v1/models/[^/]+",
+        lambda req: httpx.Response(
+            200,
+            json=make_model_with_counts(id=req.url.path.rsplit("/", 1)[-1], runCount=7),
+        ),
+    )
     model = make_client(router).models.get("mdl_1")
-    assert model.run_count == 0
+    # Both fields echo the request/response wire shape, proving routing and
+    # that runCount is parsed off the body rather than a default zero.
+    assert model.id == "mdl_1"
+    assert model.run_count == 7
 
 
 def test_models_list_filters_simulator_type() -> None:
@@ -243,7 +262,9 @@ def test_run_results_download_returns_url() -> None:
 
 def test_uploads_presign_sends_size_bytes() -> None:
     router = Router().json(
-        "POST", r"/v1/uploads/presign", {"url": "https://s3/x", "key": "k"}
+        "POST",
+        r"/v1/uploads/presign",
+        {"url": "https://files.example/upload", "key": "k"},
     )
     client = make_client(router)
     resp = client.uploads.presign(
@@ -258,7 +279,9 @@ def test_uploads_presign_sends_size_bytes() -> None:
 
 def test_uploads_presign_rejects_oversize_client_side() -> None:
     router = Router().json(
-        "POST", r"/v1/uploads/presign", {"url": "https://s3/x", "key": "k"}
+        "POST",
+        r"/v1/uploads/presign",
+        {"url": "https://files.example/upload", "key": "k"},
     )
     client = make_client(router)
     with pytest.raises(ValueError, match="exceeds the maximum"):
@@ -273,7 +296,9 @@ def test_uploads_presign_rejects_oversize_client_side() -> None:
 
 def test_uploads_presign_rejects_nonpositive_size() -> None:
     router = Router().json(
-        "POST", r"/v1/uploads/presign", {"url": "https://s3/x", "key": "k"}
+        "POST",
+        r"/v1/uploads/presign",
+        {"url": "https://files.example/upload", "key": "k"},
     )
     with pytest.raises(ValueError, match="positive"):
         make_client(router).uploads.presign(
