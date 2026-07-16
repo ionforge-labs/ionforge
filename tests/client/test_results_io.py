@@ -114,6 +114,96 @@ def test_load_rejects_non_object_top_level(tmp_path: Path) -> None:
         load_result(path)
 
 
+# --- non-finite JSON literals ----------------------------------------------
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+def test_load_rejects_non_finite_scalar(tmp_path: Path, literal: str) -> None:
+    # json.dumps won't emit these, so write the raw literal into the document.
+    path = tmp_path / "result.json"
+    path.write_text(f'{{"transmission": {literal}}}', encoding="utf-8")
+    with pytest.raises(ValueError, match="non-finite JSON literal"):
+        load_result(path)
+
+
+def test_load_rejects_non_finite_inside_array(tmp_path: Path) -> None:
+    path = tmp_path / "result.json"
+    path.write_text('{"exit_energies": [990.0, NaN, 992.0]}', encoding="utf-8")
+    with pytest.raises(ValueError, match="NaN"):
+        load_result(path)
+
+
+# --- loud scalar coercion --------------------------------------------------
+
+
+def test_string_int_scalar_raises_naming_field(tmp_path: Path) -> None:
+    path = _write(tmp_path, _summary(n_total="0.7"))
+    with pytest.raises((ValueError, TypeError), match="n_total"):
+        load_result(path)
+
+
+def test_string_transmission_raises_naming_field(tmp_path: Path) -> None:
+    path = _write(tmp_path, _summary(transmission="not-a-number"))
+    with pytest.raises((ValueError, TypeError), match="transmission"):
+        load_result(path)
+
+
+def test_non_numeric_energy_resolution_field_raises_naming_field(
+    tmp_path: Path,
+) -> None:
+    path = _write(tmp_path, _summary(energy_resolution={"fwhm_eV": "wide"}))
+    with pytest.raises((ValueError, TypeError), match="energy_resolution.fwhm_eV"):
+        load_result(path)
+
+
+def test_scalar_coercion_normalises_numeric_strings(tmp_path: Path) -> None:
+    # A parseable numeric string is coerced to a real number, not left as str.
+    path = _write(tmp_path, _summary(n_total="10", transmission="0.7"))
+    data = load_result(path)
+    assert data.summary.n_total == 10
+    assert isinstance(data.summary.n_total, int)
+    assert data.summary.transmission == 0.7
+    assert isinstance(data.summary.transmission, float)
+
+
+# --- trajectory position shape validation ----------------------------------
+
+
+def test_positions_accept_three_columns(tmp_path: Path) -> None:
+    document = {
+        "summary": _summary(),
+        "trajectories": [
+            {
+                "transmitted": True,
+                "n_steps": 2,
+                "positions": [[0.0, 0.0, 0.0], [0.01, 0.001, 0.002]],
+            }
+        ],
+    }
+    data = load_result(_write(tmp_path, document))
+    traj = data.trajectories[0]
+    assert traj.positions is not None
+    assert traj.positions.shape == (2, 3)
+
+
+def test_positions_reject_one_dimensional(tmp_path: Path) -> None:
+    document = {
+        "summary": _summary(),
+        "trajectories": [{"transmitted": True, "positions": [0.0, 0.1, 0.2]}],
+    }
+    with pytest.raises(ValueError, match="2 or 3 columns"):
+        load_result(_write(tmp_path, document))
+
+
+def test_positions_reject_four_columns(tmp_path: Path) -> None:
+    document = {
+        "summary": _summary(),
+        "trajectories": [{"transmitted": True, "positions": [[0.0, 0.0, 0.0, 0.0]]}],
+    }
+    with pytest.raises(ValueError, match=r"shape \(1, 4\)"):
+        load_result(_write(tmp_path, document))
+
+
 # --- missing optionals -----------------------------------------------------
 
 
@@ -236,6 +326,83 @@ def test_to_dataframe_raises_on_mismatched_exit_arrays(tmp_path: Path) -> None:
     data = load_result(_write(tmp_path, document))
     with pytest.raises(ValueError, match="mismatched lengths"):
         data.to_dataframe()
+
+
+# --- stable dataframe accessors --------------------------------------------
+
+
+def test_stable_accessors_on_lossy_run(tmp_path: Path) -> None:
+    # 10 launched, 7 transmitted -- to_dataframe() would return a dict here.
+    data = load_result(_write(tmp_path, _summary()))
+    assert isinstance(data.to_dataframe(), dict)
+
+    particles = data.particles_dataframe()
+    assert isinstance(particles, pd.DataFrame)
+    assert list(particles.columns) == ["input_energy"]
+    assert len(particles) == 10
+
+    exits = data.exits_dataframe()
+    assert isinstance(exits, pd.DataFrame)
+    assert set(exits.columns) == {"exit_energy", "exit_position"}
+    assert len(exits) == 7
+
+
+def test_stable_accessors_on_lossless_run(tmp_path: Path) -> None:
+    document = _summary(
+        n_total=3,
+        n_transmitted=3,
+        input_energies=[1000.0, 1000.0, 1000.0],
+        exit_energies=[990.0, 991.0, 992.0],
+        exit_positions=[0.001, 0.002, 0.003],
+    )
+    data = load_result(_write(tmp_path, document))
+    # The adaptive accessor collapses to a single frame here.
+    assert isinstance(data.to_dataframe(), pd.DataFrame)
+
+    # The stable accessors keep the two tables separate regardless.
+    particles = data.particles_dataframe()
+    assert list(particles.columns) == ["input_energy"]
+    assert len(particles) == 3
+
+    exits = data.exits_dataframe()
+    assert set(exits.columns) == {"exit_energy", "exit_position"}
+    assert len(exits) == 3
+
+
+def test_stable_accessors_shape_is_invariant_across_runs(tmp_path: Path) -> None:
+    # Same columns whether the run is lossy or lossless -- no type/shape flip.
+    lossy = load_result(_write(tmp_path, _summary(), name="lossy.json"))
+    lossless = load_result(
+        _write(
+            tmp_path,
+            _summary(
+                n_total=3,
+                n_transmitted=3,
+                input_energies=[1000.0, 1000.0, 1000.0],
+                exit_energies=[990.0, 991.0, 992.0],
+                exit_positions=[0.001, 0.002, 0.003],
+            ),
+            name="lossless.json",
+        )
+    )
+    assert (
+        list(lossy.particles_dataframe().columns)
+        == list(lossless.particles_dataframe().columns)
+        == ["input_energy"]
+    )
+    assert set(lossy.exits_dataframe().columns) == set(
+        lossless.exits_dataframe().columns
+    )
+
+
+def test_exits_dataframe_raises_on_mismatched_exit_arrays(tmp_path: Path) -> None:
+    document = {
+        "exit_energies": [990.0, 991.0, 992.0],
+        "exit_positions": [0.001, 0.002],
+    }
+    data = load_result(_write(tmp_path, document))
+    with pytest.raises(ValueError, match="mismatched lengths"):
+        data.exits_dataframe()
 
 
 # --- transmission_curve_dataframe ------------------------------------------

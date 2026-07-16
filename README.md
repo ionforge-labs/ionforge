@@ -288,17 +288,18 @@ with IonForge() as client:
     paths = client.download_results(run.id, output_dir="results/")
     data = load_result(paths[0])
 
-    print(f"transmission: {data.summary.transmission:.1%}")
+    if data.summary.transmission is not None:
+        print(f"transmission: {data.summary.transmission:.1%}")
     if data.summary.energy_resolution:
         print(f"energy resolution FWHM: {data.summary.energy_resolution.fwhm_eV:.3f} eV")
 
     # Per-particle numbers as numpy arrays.
     exit_energy_spread = data.exit_energies.std()
 
-    # A per-particle frame (input array covers all launched particles, exit
-    # arrays only the transmitted ones, so equal lengths give one frame and
-    # unequal lengths give a {"particles", "exits"} pair of frames).
-    frames = data.to_dataframe()
+    # Stable per-particle frames: one row per launched particle, and one row
+    # per transmitted particle. Their shapes don't flip when particles are lost.
+    particles = data.particles_dataframe()  # column: input_energy
+    exits = data.exits_dataframe()  # columns: exit_energy, exit_position
 
     # The energy-transmission curve, when present.
     curve = data.transmission_curve_dataframe()

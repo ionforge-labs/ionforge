@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 
@@ -31,6 +31,8 @@ from ._dataframe import _require_pandas
 
 if TYPE_CHECKING:
     import pandas as pd
+
+_Number = TypeVar("_Number", int, float)
 
 
 @dataclass(frozen=True)
@@ -97,7 +99,7 @@ class Trajectory:
     n_steps: int | None = None
     """Number of integration steps stored for this particle."""
     positions: np.ndarray | None = None
-    """Stored positions as an ``(N, 2)`` float array, or ``None``."""
+    """Stored positions as an ``(N, 2)`` or ``(N, 3)`` float array, or ``None``."""
     times: np.ndarray | None = None
     """Stored step times as a 1-D float array, or ``None``."""
 
@@ -126,8 +128,54 @@ class RunResultData:
     _present: frozenset[str] = field(default_factory=frozenset, repr=False)
     """Names of the per-particle array fields present in the source file."""
 
+    def _exit_columns(self) -> dict[str, np.ndarray]:
+        """Collect the present exit columns, checking they share a row count."""
+        exit_cols: dict[str, np.ndarray] = {}
+        if "exit_energies" in self._present:
+            exit_cols["exit_energy"] = self.exit_energies
+        if "exit_positions" in self._present:
+            exit_cols["exit_position"] = self.exit_positions
+        exit_lengths = {len(v) for v in exit_cols.values()}
+        if len(exit_lengths) > 1:
+            raise ValueError(
+                "exit arrays have mismatched lengths "
+                f"{ {k: len(v) for k, v in exit_cols.items()} }; "
+                "the result file is malformed"
+            )
+        return exit_cols
+
+    def particles_dataframe(self) -> pd.DataFrame:
+        """Return one row per *launched* particle, with an ``input_energy`` column.
+
+        The frame's shape is stable regardless of transmission losses -- it
+        always carries the ``input_energy`` column and one row per launched
+        particle (zero rows when the source file omitted the input array).
+        Pair it with :meth:`exits_dataframe` for the transmitted particles.
+        Requires the ``pandas`` extra.
+        """
+        pd = _require_pandas()
+        return pd.DataFrame({"input_energy": self.input_energies})
+
+    def exits_dataframe(self) -> pd.DataFrame:
+        """Return one row per *transmitted* particle at the exit plane.
+
+        Carries the ``exit_energy`` and/or ``exit_position`` columns that were
+        present in the source file, one row per transmitted particle. The shape
+        does not flip with transmission losses; pair it with
+        :meth:`particles_dataframe` for the launched particles. Requires the
+        ``pandas`` extra.
+        """
+        pd = _require_pandas()
+        return pd.DataFrame(self._exit_columns())
+
     def to_dataframe(self) -> pd.DataFrame | dict[str, pd.DataFrame]:
         """Assemble the per-particle arrays into a DataFrame.
+
+        .. note::
+           This method's return *type* is adaptive (see below): a single frame
+           or a dict of frames depending on the run's transmission losses. For a
+           stable shape, prefer :meth:`particles_dataframe` and
+           :meth:`exits_dataframe`, which each always return one frame.
 
         The input array holds one value per *launched* particle, while the exit
         arrays hold one value per *transmitted* particle, so their lengths
@@ -149,21 +197,11 @@ class RunResultData:
         """
         pd = _require_pandas()
 
-        exit_cols: dict[str, np.ndarray] = {}
-        if "exit_energies" in self._present:
-            exit_cols["exit_energy"] = self.exit_energies
-        if "exit_positions" in self._present:
-            exit_cols["exit_position"] = self.exit_positions
+        exit_cols = self._exit_columns()
         has_input = "input_energies" in self._present
 
         n_in = len(self.input_energies) if has_input else None
         exit_lengths = {len(v) for v in exit_cols.values()}
-        if len(exit_lengths) > 1:
-            raise ValueError(
-                "exit arrays have mismatched lengths "
-                f"{ {k: len(v) for k, v in exit_cols.items()} }; "
-                "the result file is malformed"
-            )
         n_exit = exit_lengths.pop() if exit_cols else None
 
         # Single frame when the two row counts coincide (or one side is absent).
@@ -193,6 +231,37 @@ class RunResultData:
         return pd.DataFrame({"energy": energies, "transmission": transmission})
 
 
+def _reject_non_finite(literal: str) -> float:
+    """Raise on a non-finite JSON literal (``NaN``/``Infinity``/``-Infinity``).
+
+    Passed as ``json.load(parse_constant=...)`` so these literals -- which
+    standard JSON forbids -- fail loudly at parse time rather than slipping into
+    result arrays or scalars as silent bad data.
+    """
+    raise ValueError(
+        f"result file contains a non-finite JSON literal {literal!r}; "
+        "standard JSON forbids NaN, Infinity and -Infinity"
+    )
+
+
+def _coerce_scalar(value: Any, field: str, cast: type[_Number]) -> _Number | None:
+    """Coerce a scalar metric through ``cast``, naming ``field`` on failure.
+
+    ``None`` passes through unchanged. Anything ``cast`` cannot accept (e.g. a
+    string where a number is expected) raises loudly at parse time, naming the
+    field, rather than surfacing later as a cryptic formatting error.
+    """
+    if value is None:
+        return None
+    try:
+        return cast(value)
+    except (TypeError, ValueError) as exc:
+        raise type(exc)(
+            f"summary field {field!r} could not be coerced to "
+            f"{cast.__name__}: {value!r}"
+        ) from exc
+
+
 def _as_float_array(value: Any) -> np.ndarray:
     """Coerce a JSON list (or ``None``) into a 1-D float array."""
     if value is None:
@@ -204,9 +273,9 @@ def _parse_energy_resolution(data: Any) -> EnergyResolution | None:
     if not isinstance(data, dict):
         return None
     return EnergyResolution(
-        fwhm_eV=data.get("fwhm_eV"),
-        mean_eV=data.get("mean_eV"),
-        std_eV=data.get("std_eV"),
+        fwhm_eV=_coerce_scalar(data.get("fwhm_eV"), "energy_resolution.fwhm_eV", float),
+        mean_eV=_coerce_scalar(data.get("mean_eV"), "energy_resolution.mean_eV", float),
+        std_eV=_coerce_scalar(data.get("std_eV"), "energy_resolution.std_eV", float),
     )
 
 
@@ -214,9 +283,9 @@ def _parse_psf(data: Any) -> PSF | None:
     if not isinstance(data, dict):
         return None
     return PSF(
-        mean_x=data.get("mean_x"),
-        std_x=data.get("std_x"),
-        fwhm_x=data.get("fwhm_x"),
+        mean_x=_coerce_scalar(data.get("mean_x"), "psf.mean_x", float),
+        std_x=_coerce_scalar(data.get("std_x"), "psf.std_x", float),
+        fwhm_x=_coerce_scalar(data.get("fwhm_x"), "psf.fwhm_x", float),
     )
 
 
@@ -236,6 +305,11 @@ def _parse_positions(value: Any) -> np.ndarray | None:
     arr = np.asarray(value, dtype=float)
     if arr.size == 0:
         return arr.reshape(0, 2)
+    if arr.ndim != 2 or arr.shape[1] not in (2, 3):
+        raise ValueError(
+            "trajectory positions must be a 2-D array with 2 or 3 columns "
+            f"(N, 2) or (N, 3); got array of shape {arr.shape}"
+        )
     return arr
 
 
@@ -264,9 +338,11 @@ def _from_summary(
 ]:
     """Parse a summary mapping into its typed pieces and array-presence set."""
     result_summary = ResultSummary(
-        n_total=summary.get("n_total"),
-        n_transmitted=summary.get("n_transmitted"),
-        transmission=summary.get("transmission"),
+        n_total=_coerce_scalar(summary.get("n_total"), "n_total", int),
+        n_transmitted=_coerce_scalar(
+            summary.get("n_transmitted"), "n_transmitted", int
+        ),
+        transmission=_coerce_scalar(summary.get("transmission"), "transmission", float),
         energy_resolution=_parse_energy_resolution(summary.get("energy_resolution")),
         psf=_parse_psf(summary.get("psf")),
     )
@@ -295,7 +371,7 @@ def load_result(path: str | Path) -> RunResultData:
     :param path: Path to a downloaded result file (JSON).
     """
     with open(path, encoding="utf-8") as f:
-        document: Any = json.load(f)
+        document: Any = json.load(f, parse_constant=_reject_non_finite)
     if not isinstance(document, dict):
         raise ValueError(f"result file {path!s} is not a JSON object at the top level")
 

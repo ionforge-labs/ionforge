@@ -78,9 +78,10 @@ the subpackages:
   lists runs.
 - `ionforge.client.results_io` — `load_result(path)` parses a downloaded result
   file into a `RunResultData` (scalar `.summary`, numpy exit/input arrays,
-  optional `.trajectories`); `.to_dataframe()` and
-  `.transmission_curve_dataframe()` need the `pandas` extra. `client.load_results`
-  downloads and parses in one call.
+  optional `.trajectories`); stable `.particles_dataframe()` /
+  `.exits_dataframe()` accessors (fixed shape), the adaptive `.to_dataframe()`,
+  and `.transmission_curve_dataframe()` need the `pandas` extra.
+  `client.load_results` downloads and parses in one call.
 - `ionforge._types._generated` — request/response and parameter models
   (`ModelParams`, `BeamParams`, `SolverParams`, `IntegratorParams`, ...)
   generated from the public OpenAPI spec. Regenerate with
