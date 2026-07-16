@@ -74,7 +74,8 @@ the subpackages:
   exceptions (`APIError`, `AuthenticationError`, `NotFoundError`, ...).
   Tabular analysis via the `pandas` extra: `sweeps.list_results(...)` returns a
   `SweepResults` collection with `.to_dataframe()` (one row per point, swept
-  params as dot-path columns), and `runs.to_dataframe(...)` lists runs.
+  params as `param.`-prefixed dot-path columns), and `runs.to_dataframe(...)`
+  lists runs.
 - `ionforge._types._generated` — request/response and parameter models
   (`ModelParams`, `BeamParams`, `SolverParams`, `IntegratorParams`, ...)
   generated from the public OpenAPI spec. Regenerate with

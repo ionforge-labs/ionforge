@@ -36,16 +36,29 @@ def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     Sweep points and result summaries arrive as flat ``{dot.path: value}``
     records, but nested mappings are flattened defensively so a ``{"beam":
     {"E_nominal": 1000}}`` shape yields a ``beam.E_nominal`` column too.
+
+    Raises ``ValueError`` if two entries collapse to the same dot-path column
+    (e.g. ``{"beam.E": 1.0, "beam": {"E": 2.0}}``): silently keeping only one
+    value would drop data from a malformed payload without warning.
     """
     out: dict[str, Any] = {}
     if not isinstance(value, dict):
         return out
+
+    def _set(col: str, val: Any) -> None:
+        if col in out:
+            raise ValueError(
+                f"duplicate dot-path column {col!r} while flattening record"
+            )
+        out[col] = val
+
     for key, val in value.items():
         col = f"{prefix}{key}"
         if isinstance(val, dict):
-            out.update(_flatten(val, prefix=f"{col}."))
+            for nested_col, nested_val in _flatten(val, prefix=f"{col}.").items():
+                _set(nested_col, nested_val)
         else:
-            out[col] = val
+            _set(col, val)
     return out
 
 
@@ -74,9 +87,10 @@ _SWEEP_BASE_COLUMNS = [
 def _sweep_row_record(row: Row | Row1) -> dict[str, Any]:
     """Turn a sweep results row into a flat record.
 
-    Swept parameter values are flattened by their dot-path (``beam.E_nominal``);
-    ``full``-mode result-summary metrics are flattened under a ``summary.``
-    prefix so they never collide with a swept-parameter column.
+    Swept parameter values are flattened by their dot-path under a ``param.``
+    prefix (``param.beam.E_nominal``); ``full``-mode result-summary metrics are
+    flattened under a ``summary.`` prefix. Both prefixes keep those columns from
+    ever colliding with a base point/status column.
     """
     record: dict[str, Any] = {
         "run_id": row.run_id,
@@ -87,7 +101,7 @@ def _sweep_row_record(row: Row | Row1) -> dict[str, Any]:
         "error": row.error,
     }
     for col, val in _flatten(row.sweep_point or {}).items():
-        record[col] = val
+        record[f"param.{col}"] = val
     summary = getattr(row, "result_summary", None)
     for col, val in _flatten(summary or {}).items():
         record[f"summary.{col}"] = val
@@ -98,9 +112,9 @@ def sweep_rows_to_dataframe(rows: list[Row | Row1]) -> pd.DataFrame:
     """Assemble sweep-point rows into a DataFrame with stable column ordering.
 
     Columns are: the base point/status columns, then the swept-parameter
-    columns (sorted by dot-path), then any ``summary.*`` metric columns
-    (sorted). An empty ``rows`` list yields an empty frame that still carries
-    the base columns.
+    columns (``param.*``, sorted by dot-path), then any ``summary.*`` metric
+    columns (sorted). An empty ``rows`` list yields an empty frame that still
+    carries the base columns.
     """
     pd = _require_pandas()
     records = [_sweep_row_record(row) for row in rows]

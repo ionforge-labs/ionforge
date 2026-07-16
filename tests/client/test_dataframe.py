@@ -14,6 +14,8 @@ import httpx
 import pandas as pd
 import pytest
 
+from ionforge.client._dataframe import _flatten
+
 from .conftest import (
     Router,
     make_async_client,
@@ -42,16 +44,16 @@ def test_sweep_to_dataframe_columns_and_dtypes() -> None:
         "completed_at",
         "duration_seconds",
         "error",
-        "beam.E_nominal",
+        "param.beam.E_nominal",
     ]
     assert len(df) == 2
     # A swept numeric parameter comes through as a numeric column.
-    assert pd.api.types.is_numeric_dtype(df["beam.E_nominal"])
+    assert pd.api.types.is_numeric_dtype(df["param.beam.E_nominal"])
     assert pd.api.types.is_numeric_dtype(df["objective"])
     assert pd.api.types.is_numeric_dtype(df["duration_seconds"])
     # Timestamps are parsed into a datetime dtype.
     assert pd.api.types.is_datetime64_any_dtype(df["completed_at"])
-    assert df["beam.E_nominal"].tolist() == [1000.0, 2000.0]
+    assert df["param.beam.E_nominal"].tolist() == [1000.0, 2000.0]
 
 
 def test_sweep_to_dataframe_flattens_multiple_axes() -> None:
@@ -62,9 +64,31 @@ def test_sweep_to_dataframe_flattens_multiple_axes() -> None:
     ]
     router = Router().json("GET", r"/v1/sweeps/swp_1/results", sweep_results_page(rows))
     df = make_client(router).sweeps.list_results("swp_1").to_dataframe()
-    # Both dot-path axes become their own columns, sorted after the base ones.
-    assert list(df.columns)[-2:] == ["beam.E_nominal", "tube.voltage"]
-    assert df["tube.voltage"].tolist() == [-500.0]
+    # Both dot-path axes become their own ``param.`` columns, sorted after base.
+    assert list(df.columns)[-2:] == ["param.beam.E_nominal", "param.tube.voltage"]
+    assert df["param.tube.voltage"].tolist() == [-500.0]
+
+
+def test_flatten_raises_on_duplicate_dot_path() -> None:
+    # A flat dot-path and a nested mapping that collapse to the same column are
+    # a malformed payload; flattening must fail loud rather than last-wins.
+    with pytest.raises(ValueError, match=r"duplicate dot-path column 'beam\.E'"):
+        _flatten({"beam.E": 1.0, "beam": {"E": 2.0}})
+
+
+def test_sweep_param_prefix_is_collision_proof_with_base_columns() -> None:
+    # A swept param whose dot-path matches a base column lands under ``param.``
+    # and so cannot overwrite the base ``status`` column.
+    rows = [
+        make_sweep_row(runId="run_1", sweepPoint={"status": 42.0}),
+    ]
+    router = Router().json("GET", r"/v1/sweeps/swp_1/results", sweep_results_page(rows))
+    df = make_client(router).sweeps.list_results("swp_1").to_dataframe()
+    assert "param.status" in df.columns
+    assert df["param.status"].tolist() == [42.0]
+    # The base status column is untouched (its default sweep-row value).
+    assert "status" in df.columns
+    assert df["param.status"].tolist() != df["status"].tolist()
 
 
 def test_sweep_to_dataframe_full_mode_summary_columns() -> None:

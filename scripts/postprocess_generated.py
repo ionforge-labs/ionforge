@@ -13,6 +13,10 @@ defined in the same module and whose string value is one of that enum's members,
 so it is safe to run unconditionally as part of ``just codegen`` and is
 idempotent.
 
+After rewriting, the script re-parses its own output and fails loud (non-zero
+exit, listing offenders) if any ``StrEnum``-annotated field still carries a
+plain-string default, so a missed rewrite can never slip through silently.
+
 Usage::
 
     python scripts/postprocess_generated.py <generated-module.py>
@@ -24,13 +28,27 @@ import ast
 import sys
 
 
+def _is_strenum_base(base: ast.expr) -> bool:
+    """True if *base* names ``StrEnum`` as a bare name or an attribute.
+
+    Accepts both the ``StrEnum`` name (``from enum import StrEnum``) and the
+    ``enum.StrEnum`` attribute form, so a change in how the generator imports
+    the base class does not silently disable the rewrite.
+    """
+    if isinstance(base, ast.Name):
+        return base.id == "StrEnum"
+    if isinstance(base, ast.Attribute):
+        return base.attr == "StrEnum"
+    return False
+
+
 def _enum_value_to_member(tree: ast.Module) -> dict[str, dict[str, str]]:
     """Map each ``StrEnum`` class to its ``{value: member_name}`` lookup."""
     enums: dict[str, dict[str, str]] = {}
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
             continue
-        if not any(isinstance(b, ast.Name) and b.id == "StrEnum" for b in node.bases):
+        if not any(_is_strenum_base(b) for b in node.bases):
             continue
         members: dict[str, str] = {}
         for stmt in node.body:
@@ -56,8 +74,43 @@ def _referenced_enum(annotation: ast.expr, enum_names: set[str]) -> str | None:
     return next(iter(found)) if len(found) == 1 else None
 
 
+def _string_enum_defaults(source: str) -> list[str]:
+    """Describe every ``StrEnum``-annotated field left with a plain-string default.
+
+    After :func:`postprocess` runs, any such field is a *missed* rewrite: either
+    its declared enum has no matching member, or the emission slipped past the
+    detection heuristics. Each entry is a human-readable ``Class.field`` locator.
+    """
+    tree = ast.parse(source)
+    enum_names = set(_enum_value_to_member(tree))
+    remaining: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for stmt in node.body:
+            if not isinstance(stmt, ast.AnnAssign) or stmt.value is None:
+                continue
+            if not isinstance(stmt.value, ast.Constant):
+                continue
+            if not isinstance(stmt.value.value, str):
+                continue
+            if _referenced_enum(stmt.annotation, enum_names) is None:
+                continue
+            field = stmt.target.id if isinstance(stmt.target, ast.Name) else "<field>"
+            remaining.append(
+                f"{node.name}.{field} (line {stmt.lineno}): {stmt.value.value!r}"
+            )
+    return remaining
+
+
 def _replacements(source: str) -> list[tuple[int, int, str]]:
     """Collect ``(start, end, text)`` byte-offset edits for enum defaults."""
+    if not source.isascii():
+        raise ValueError(
+            "source contains non-ASCII characters; ast col_offset is a byte "
+            "offset, so char-based slicing would corrupt the rewrite. Refusing "
+            "to edit rather than emit garbage."
+        )
     tree = ast.parse(source)
     enums = _enum_value_to_member(tree)
     enum_names = set(enums)
@@ -112,6 +165,16 @@ def main(argv: list[str]) -> int:
     with open(path, encoding="utf-8") as fh:
         source = fh.read()
     updated = postprocess(source)
+    remaining = _string_enum_defaults(updated)
+    if remaining:
+        print(
+            "error: StrEnum-annotated fields still have plain-string defaults "
+            "after rewrite (missed rewrites):",
+            file=sys.stderr,
+        )
+        for entry in remaining:
+            print(f"  {entry}", file=sys.stderr)
+        return 1
     if updated != source:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(updated)

@@ -262,7 +262,7 @@ An `AsyncIonForge` client with the same surface is available for asyncio code.
 
 ### Analysing results with pandas
 
-Install the `pandas` extra (`uv add "ionforge[pandas]"`) to pull sweep and run results straight into a DataFrame for analysis and plotting. Sweep results give one row per point, with each swept parameter flattened to its own dot-path column (`beam.E_nominal`) alongside the objective and per-point status:
+Install the `pandas` extra (`uv add "ionforge[pandas]"`) to pull sweep and run results straight into a DataFrame for analysis and plotting. Sweep results give one row per point, with each swept parameter flattened to its own `param.`-prefixed dot-path column (`param.beam.E_nominal`) alongside the objective and per-point status:
 
 ```python
 with IonForge() as client:
@@ -271,7 +271,7 @@ with IonForge() as client:
     df = results.to_dataframe()
 
     # e.g. transmission vs beam energy
-    df.plot.scatter(x="beam.E_nominal", y="summary.transmission")
+    df.plot.scatter(x="param.beam.E_nominal", y="summary.transmission")
 
     # A tabular view of every run in a project
     runs_df = client.runs.to_dataframe(project_id=project.id)
