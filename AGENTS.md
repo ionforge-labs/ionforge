@@ -48,8 +48,9 @@ install, use one of the `viz*` extras.
 - **x/y are transverse**, centred on the z axis by construction.
 - **Absolute coordinates.** The builder does not recentre or auto-fit geometry;
   position every primitive explicitly. Origin is fixed at `(0, 0, 0)`.
-- **Geometry `symmetry`** is one of `none`, `axisymmetric`, `planar` (pass to
-  `Geometry(symmetry=...)`).
+- **The builder requires a domain box.** `bounding_box` is mandatory:
+  `Geometry(bounding_box=(sx, sy, sz), symmetry=...)`. `symmetry` is one of
+  `none`, `axisymmetric`, `planar`.
 - **Style**: ruff with line-length 88 and double quotes; `ty` for type
   checking; pytest tests are plain `test_*` functions (no classes required).
 
@@ -58,8 +59,9 @@ install, use one of the `viz*` extras.
 No top-level `ionforge` import surface — it is a namespace package. Import from
 the subpackages:
 
-- `ionforge.geometry` — `Geometry` builder; primitives `Cylinder`,
-  `AnnularDisk`, `Cone`, `Sphere`; serialization models `SerializedGeometry`,
+- `ionforge.geometry` — `Geometry` builder (`add`, `to_serialized_geometry`,
+  and `SerializedGeometry.validate_consistency()` on the result); primitives
+  `Cylinder`, `AnnularDisk`, `Cone`, `Sphere`; serialization models `SerializedGeometry`,
   `BoundingBox`, `Vertex`, `Edge`, `Face`, `Group`, `Symmetry`, `Vec3`; STL I/O
   in `ionforge.geometry.stl_import` (`load_stl`, `mesh_stats`, `write_stl`);
   3-D rendering in `ionforge.geometry.visualization` (`render`, or
