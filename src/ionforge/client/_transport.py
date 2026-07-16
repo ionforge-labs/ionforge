@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
@@ -98,10 +99,34 @@ def _should_retry(
     return method in _RETRYABLE_METHODS or status_code == 429
 
 
+def _should_retry_transport_error(
+    method: str, exc: httpx.HTTPError, attempt: int, max_retries: int
+) -> bool:
+    """Decide whether a transport-level (network) error is safe to retry.
+
+    Connection-phase errors mean the request never reached the server, so they
+    are safe to retry for any method. Errors that surface after the request may
+    already be in flight (read timeouts, protocol errors) are only retried for
+    idempotent methods, so a POST is never silently re-sent.
+    """
+    if attempt >= max_retries:
+        return False
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return True
+    return method in _RETRYABLE_METHODS
+
+
 def _backoff_delay(attempt: int, retry_after: float | None) -> float:
     if retry_after is not None:
         return retry_after
     return min(0.5 * (2**attempt), 8.0)
+
+
+def _retry_after_for_status(response: httpx.Response) -> float | None:
+    """Extract the ``Retry-After`` delay for a rate-limited response, if any."""
+    if response.status_code == 429:
+        return _parse_retry_after(response.headers.get("retry-after"))
+    return None
 
 
 class SyncTransport:
@@ -135,7 +160,9 @@ class SyncTransport:
             try:
                 response = self._client.request(method, path, json=json, params=params)
             except httpx.HTTPError as exc:
-                if attempt < self._config.max_retries:
+                if _should_retry_transport_error(
+                    method, exc, attempt, self._config.max_retries
+                ):
                     time.sleep(_backoff_delay(attempt, None))
                     attempt += 1
                     continue
@@ -147,12 +174,7 @@ class SyncTransport:
                 attempt,
                 self._config.max_retries,
             ):
-                retry_after = None
-                if response.status_code == 429:
-                    retry_after = _parse_retry_after(
-                        response.headers.get("retry-after")
-                    )
-                time.sleep(_backoff_delay(attempt, retry_after))
+                time.sleep(_backoff_delay(attempt, _retry_after_for_status(response)))
                 attempt += 1
                 continue
 
@@ -192,8 +214,6 @@ class AsyncTransport:
         params: dict[str, Any] | None = None,
     ) -> Any:
         """Send a request and return the parsed JSON response body."""
-        import asyncio
-
         attempt = 0
         while True:
             try:
@@ -201,7 +221,9 @@ class AsyncTransport:
                     method, path, json=json, params=params
                 )
             except httpx.HTTPError as exc:
-                if attempt < self._config.max_retries:
+                if _should_retry_transport_error(
+                    method, exc, attempt, self._config.max_retries
+                ):
                     await asyncio.sleep(_backoff_delay(attempt, None))
                     attempt += 1
                     continue
@@ -213,12 +235,9 @@ class AsyncTransport:
                 attempt,
                 self._config.max_retries,
             ):
-                retry_after = None
-                if response.status_code == 429:
-                    retry_after = _parse_retry_after(
-                        response.headers.get("retry-after")
-                    )
-                await asyncio.sleep(_backoff_delay(attempt, retry_after))
+                await asyncio.sleep(
+                    _backoff_delay(attempt, _retry_after_for_status(response))
+                )
                 attempt += 1
                 continue
 

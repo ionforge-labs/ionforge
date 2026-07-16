@@ -72,7 +72,7 @@ def test_run_simulation_full_flow_reaches_terminal() -> None:
         geometry_id="geo_1",
         params=params,
         run_name="baseline",
-        poll_interval=0.0,
+        poll_interval=0.01,
         poll_timeout=10.0,
     )
     assert run.status == "completed"
@@ -87,7 +87,7 @@ def test_run_simulation_passes_params_to_model_not_run() -> None:
         geometry_id="geo_1",
         params=ModelParams(beam=BeamParams(e_nominal=1000.0)),
         run_name="baseline",
-        poll_interval=0.0,
+        poll_interval=0.01,
     )
     # Params belong to the model; the run inherits them and must not resend them.
     assert "params" in captured["model"]

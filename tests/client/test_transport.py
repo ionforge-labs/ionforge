@@ -200,6 +200,63 @@ def test_connect_error_retries_then_raises_connection_error(
     assert len(_no_sleep) == max_retries
 
 
+def test_post_not_retried_on_read_timeout(_no_sleep: list[float]) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        raise httpx.ReadTimeout("read timed out")
+
+    client = make_client(
+        Router().add("POST", r"/v1/projects", handler),
+        max_retries=3,
+    )
+    with pytest.raises(ConnectionError):
+        client.projects.create(name="P")
+    # A read-phase failure may mean the POST already reached the server, so it
+    # must not be re-sent: exactly one attempt, no backoff sleeps.
+    assert calls["n"] == 1
+    assert _no_sleep == []
+
+
+def test_post_retried_on_connect_error(_no_sleep: list[float]) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        raise httpx.ConnectError("connection refused")
+
+    max_retries = 2
+    client = make_client(
+        Router().add("POST", r"/v1/projects", handler),
+        max_retries=max_retries,
+    )
+    with pytest.raises(ConnectionError):
+        client.projects.create(name="P")
+    # The connection never reached the server, so re-sending the POST is safe.
+    assert calls["n"] == max_retries + 1
+    assert len(_no_sleep) == max_retries
+
+
+def test_get_retried_on_read_timeout(_no_sleep: list[float]) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        raise httpx.ReadTimeout("read timed out")
+
+    max_retries = 2
+    client = make_client(
+        Router().add("GET", r"/v1/projects/proj_1", handler),
+        max_retries=max_retries,
+    )
+    with pytest.raises(ConnectionError):
+        client.projects.get("proj_1")
+    # GET is idempotent, so a read timeout is retried like any transport error.
+    assert calls["n"] == max_retries + 1
+    assert len(_no_sleep) == max_retries
+
+
 def test_non_json_error_body_falls_back_to_text() -> None:
     router = Router().add(
         "GET",
