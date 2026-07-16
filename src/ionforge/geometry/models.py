@@ -19,6 +19,7 @@ from ionforge._types._generated import (
     Edge,
     Face,
     Group,
+    Symmetry,
 )
 from ionforge._types._generated import (
     SerializedGeometry as _GeneratedSerializedGeometry,
@@ -35,6 +36,7 @@ __all__ = [
     "Face",
     "Group",
     "SerializedGeometry",
+    "Symmetry",
     "Vec3",
     "Vertex",
 ]

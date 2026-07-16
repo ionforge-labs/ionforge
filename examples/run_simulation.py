@@ -58,11 +58,14 @@ def build_einzel_geometry() -> Geometry:
     The electrodes are stacked along the z axis: an entrance aperture, then
     ground / focusing / ground tubes separated by small gaps, then an exit
     aperture. Returns the builder so the caller can also validate or upload it.
+
+    Every electrode is a coaxial tube or disk, so the lens is rotationally
+    symmetric about the z axis and is marked ``symmetry="axisymmetric"``.
     """
     # Total column length plus head-room for the bounding box.
     column_length = 3 * TUBE_LENGTH + 2 * GAP
     box = (0.06, 0.06, column_length + 0.06)
-    geo = Geometry(bounding_box=box)
+    geo = Geometry(bounding_box=box, symmetry="axisymmetric")
 
     # Entrance aperture plate at the front of the column.
     entrance_z = 0.010

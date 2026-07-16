@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import BoundingBox, Edge, Face, Group, SerializedGeometry, Vec3, Vertex
+from .models import (
+    BoundingBox,
+    Edge,
+    Face,
+    Group,
+    SerializedGeometry,
+    Symmetry,
+    Vec3,
+    Vertex,
+)
 from .primitives import AnnularDisk, Cone, Cylinder, Sphere, _MeshResult
 
 Primitive = Cylinder | AnnularDisk | Cone | Sphere
@@ -19,12 +28,23 @@ class Geometry:
         geo.add(Cylinder(r=0.01, length=0.05, voltage=100, name="tube"))
         geo.add(AnnularDisk(inner_radius=0.005, outer_radius=0.01, voltage=0), z=0.06)
         serialized = geo.to_serialized_geometry()
+
+    Pass ``symmetry="axisymmetric"`` for geometries that are rotationally
+    symmetric about the z axis (or ``"planar"`` for a mirror-plane symmetry) so
+    downstream solvers can exploit it. The value is carried through to
+    :attr:`SerializedGeometry.symmetry`.
     """
 
-    def __init__(self, bounding_box: Vec3, bounding_box_voltage: float = 0.0) -> None:
+    def __init__(
+        self,
+        bounding_box: Vec3,
+        bounding_box_voltage: float = 0.0,
+        symmetry: Symmetry | str = "none",
+    ) -> None:
         self._bounding_box = BoundingBox(
             size=bounding_box, voltage=bounding_box_voltage
         )
+        self._symmetry = Symmetry(symmetry)
         self._groups: list[_PendingGroup] = []
 
     def add(self, primitive: Primitive, z: float = 0.0) -> None:
@@ -119,6 +139,7 @@ class Geometry:
             group_order.append(group_id)
 
         return SerializedGeometry(
+            symmetry=self._symmetry,
             vertices=all_vertices,
             edges=all_edges,
             faces=all_faces,

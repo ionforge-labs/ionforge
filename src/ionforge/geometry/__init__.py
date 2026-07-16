@@ -12,6 +12,7 @@ from .models import (
     Face,
     Group,
     SerializedGeometry,
+    Symmetry,
     Vec3,
     Vertex,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "Group",
     "SerializedGeometry",
     "Sphere",
+    "Symmetry",
     "Vec3",
     "Vertex",
 ]
