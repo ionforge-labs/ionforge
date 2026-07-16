@@ -40,6 +40,13 @@ def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     Raises ``ValueError`` if two entries collapse to the same dot-path column
     (e.g. ``{"beam.E": 1.0, "beam": {"E": 2.0}}``): silently keeping only one
     value would drop data from a malformed payload without warning.
+
+    ``pd.json_normalize`` was considered but is not simpler here: it returns a
+    one-row frame rather than the per-record ``dict`` these callers prefix and
+    reassemble, and it last-wins on colliding dot-paths, so restoring the
+    loud-collision guard would need a pre-check that walks the nested structure
+    anyway -- reintroducing this traversal with an extra pandas dependency in
+    the hot path.
     """
     out: dict[str, Any] = {}
     if not isinstance(value, dict):

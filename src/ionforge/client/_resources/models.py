@@ -9,6 +9,7 @@ from typing import Any
 from ionforge._types._generated import (
     CloneModelRequest,
     CreateModelRequest,
+    ListModelTemplatesResponse,
     Model,
     ModelParams,
     ModelWithCounts,
@@ -154,8 +155,7 @@ class Models(BaseSyncResource):
         if search is not None:
             params["search"] = search
         data = self._get("/models/templates", params=params)
-        items = data.get("items", data) if isinstance(data, dict) else data
-        return [Model.model_validate(item) for item in items]
+        return ListModelTemplatesResponse.model_validate(data).items
 
     def clone(
         self,
@@ -298,8 +298,7 @@ class AsyncModels(BaseAsyncResource):
         if search is not None:
             params["search"] = search
         data = await self._get("/models/templates", params=params)
-        items = data.get("items", data) if isinstance(data, dict) else data
-        return [Model.model_validate(item) for item in items]
+        return ListModelTemplatesResponse.model_validate(data).items
 
     async def clone(
         self,

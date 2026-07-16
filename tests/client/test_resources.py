@@ -7,7 +7,9 @@ import json
 import httpx
 import pytest
 
+from ionforge._types._generated import Deleted
 from ionforge.client import BeamParams, ModelParams, SolverParams
+from ionforge.client._resources._base import _serialize
 from ionforge.client._resources.uploads import MAX_UPLOAD_SIZE_BYTES
 
 from .conftest import (
@@ -27,6 +29,22 @@ from .conftest import (
 
 def _body(req: httpx.Request) -> dict:
     return json.loads(req.content)
+
+
+# --- serialization: literal pinning without mutating the caller ------------
+
+
+def test_serialize_pins_literal_constant_and_restores_fields_set() -> None:
+    model = Deleted(deleted=True)
+    # Simulate a constant built from its default: not tracked as explicitly set.
+    model.__pydantic_fields_set__.discard("deleted")
+
+    body = _serialize(model)
+    # The single-value Literal is pinned so exclude_unset never drops it.
+    assert body == {"deleted": True}
+    # And the caller's model is left untouched: pinning was reverted in place,
+    # with no deep copy of the (possibly huge) model tree.
+    assert "deleted" not in model.__pydantic_fields_set__
 
 
 # --- projects --------------------------------------------------------------
@@ -89,6 +107,22 @@ def test_geometries_create_wraps_geometry_data(einzel_serialized) -> None:
     assert "description" not in body  # exclude_none
 
 
+def test_geometries_create_accepts_dict_geometry_data(einzel_serialized) -> None:
+    router = Router().json("POST", r"/v1/geometries", make_geometry_meta())
+    client = make_client(router)
+    # A plain dict input is validated like a model; required nested fields
+    # (boundingBox.voltage has no default) survive the exclude_unset dump rather
+    # than silently dropping off the wire.
+    geometry_dict = einzel_serialized.model_dump(by_alias=True)
+    client.geometries.create(
+        project_id="proj_1", name="lens", geometry_data=geometry_dict
+    )
+    body = _body(router.last)
+    assert body["geometryData"]["version"] == 1
+    assert body["geometryData"]["boundingBox"]["voltage"] == 0.0
+    assert body["geometryData"]["groups"][0]["name"] == "tube"
+
+
 def test_geometries_list_filters_by_project() -> None:
     router = Router().json("GET", r"/v1/geometries", page([]))
     make_client(router).geometries.list(project_id="proj_7")
@@ -128,6 +162,30 @@ def test_models_create_sparse_params_sends_only_set_fields() -> None:
     )
     body = _body(router.last)
     assert body["params"] == {"beam": {"E_nominal": 1000.0}}
+
+
+def test_models_create_dict_params_match_model_params_sparse() -> None:
+    router = Router().json("POST", r"/v1/models", make_model())
+    client = make_client(router)
+    # A sparse dict input is validated the same as the equivalent model: only
+    # the caller-set field lands on the wire (server-side defaults refill the
+    # rest), so dict and model inputs produce an identical sparse body.
+    client.models.create(
+        project_id="proj_1",
+        name="m",
+        geometry_id="geo_1",
+        params={"beam": {"E_nominal": 1000.0}},
+    )
+    assert _body(router.last)["params"] == {"beam": {"E_nominal": 1000.0}}
+
+
+def test_models_list_templates_parses_items_envelope() -> None:
+    router = Router().json(
+        "GET", r"/v1/models/templates", {"items": [make_model(id="tpl_1")]}
+    )
+    templates = make_client(router).models.list_templates(search="einzel")
+    assert [t.id for t in templates] == ["tpl_1"]
+    assert router.last.url.params["search"] == "einzel"
 
 
 def test_models_get_returns_counts() -> None:

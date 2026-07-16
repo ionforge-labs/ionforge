@@ -17,6 +17,7 @@ from ionforge._types._generated import (
 from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from ._base import BaseAsyncResource, BaseSyncResource
+from ._coerce import to_model
 
 
 def _list_params(
@@ -46,15 +47,13 @@ class Geometries(BaseSyncResource):
         geometry_data: SerializedGeometry | dict[str, Any],
     ) -> GeometryMeta:
         """Create a geometry."""
-        if isinstance(geometry_data, dict):
-            geometry_data = SerializedGeometry.model_validate(geometry_data)
         data = self._post(
             "/geometries",
             body=CreateGeometryRequest(
                 project_id=project_id,
                 name=name,
                 description=description,
-                geometry_data=geometry_data,
+                geometry_data=to_model(SerializedGeometry, geometry_data),
             ),
         )
         return GeometryMeta.model_validate(data)
@@ -111,14 +110,12 @@ class Geometries(BaseSyncResource):
         geometry_data: SerializedGeometry | dict[str, Any] | None = None,
     ) -> GeometryMeta:
         """Update a geometry."""
-        if isinstance(geometry_data, dict):
-            geometry_data = SerializedGeometry.model_validate(geometry_data)
         data = self._put(
             f"/geometries/{id}",
             body=UpdateGeometryRequest(
                 name=name,
                 description=description,
-                geometry_data=geometry_data,
+                geometry_data=to_model(SerializedGeometry, geometry_data),
             ),
         )
         return GeometryMeta.model_validate(data)
@@ -140,15 +137,13 @@ class AsyncGeometries(BaseAsyncResource):
         geometry_data: SerializedGeometry | dict[str, Any],
     ) -> GeometryMeta:
         """Create a geometry."""
-        if isinstance(geometry_data, dict):
-            geometry_data = SerializedGeometry.model_validate(geometry_data)
         data = await self._post(
             "/geometries",
             body=CreateGeometryRequest(
                 project_id=project_id,
                 name=name,
                 description=description,
-                geometry_data=geometry_data,
+                geometry_data=to_model(SerializedGeometry, geometry_data),
             ),
         )
         return GeometryMeta.model_validate(data)
@@ -205,14 +200,12 @@ class AsyncGeometries(BaseAsyncResource):
         geometry_data: SerializedGeometry | dict[str, Any] | None = None,
     ) -> GeometryMeta:
         """Update a geometry."""
-        if isinstance(geometry_data, dict):
-            geometry_data = SerializedGeometry.model_validate(geometry_data)
         data = await self._put(
             f"/geometries/{id}",
             body=UpdateGeometryRequest(
                 name=name,
                 description=description,
-                geometry_data=geometry_data,
+                geometry_data=to_model(SerializedGeometry, geometry_data),
             ),
         )
         return GeometryMeta.model_validate(data)

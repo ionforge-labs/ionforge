@@ -13,34 +13,77 @@ A downloaded result file is one of two shapes:
   list when the run stored per-particle paths.
 
 :func:`load_result` accepts either shape and tolerates missing or null optional
-fields. numpy is a core dependency and is always available; pandas is optional
-(the ``pandas`` extra) and imported lazily inside :meth:`RunResultData.to_dataframe`
-and :meth:`RunResultData.transmission_curve_dataframe`.
+fields. Field typing, coercion, and shape checks are enforced by Pydantic
+models; a malformed field fails loudly with a :class:`pydantic.ValidationError`
+(a subclass of :class:`ValueError`) naming the offending field. numpy is a core
+dependency and is always available; pandas is optional (the ``pandas`` extra)
+and imported lazily inside the DataFrame accessors.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from ._dataframe import _require_pandas
 
 if TYPE_CHECKING:
     import pandas as pd
 
-_Number = TypeVar("_Number", int, float)
+
+def _to_1d_array(value: Any) -> np.ndarray:
+    """Coerce a JSON list (or ``None``) into a 1-D float array."""
+    if value is None:
+        return np.asarray([], dtype=float)
+    return np.asarray(value, dtype=float)
 
 
-@dataclass(frozen=True)
-class EnergyResolution:
+def _to_optional_1d_array(value: Any) -> np.ndarray | None:
+    """Coerce a JSON list into a 1-D float array; ``None`` passes through."""
+    if value is None:
+        return None
+    return np.asarray(value, dtype=float)
+
+
+def _to_positions(value: Any) -> np.ndarray | None:
+    """Coerce trajectory positions into an ``(N, 2)`` or ``(N, 3)`` float array.
+
+    ``None`` passes through. An empty list reshapes to ``(0, 2)``. Any other
+    shape (1-D, or a second axis that is not 2 or 3 wide) is rejected loudly so
+    a malformed trajectory never reaches analysis code as a bad array.
+    """
+    if value is None:
+        return None
+    arr = np.asarray(value, dtype=float)
+    if arr.size == 0:
+        return arr.reshape(0, 2)
+    if arr.ndim != 2 or arr.shape[1] not in (2, 3):
+        raise ValueError(
+            "trajectory positions must be a 2-D array with 2 or 3 columns "
+            f"(N, 2) or (N, 3); got array of shape {arr.shape}"
+        )
+    return arr
+
+
+def _to_curve(value: Any) -> tuple[np.ndarray, np.ndarray] | None:
+    """Coerce a ``(energies, transmission)`` pair of lists into float arrays."""
+    if value is None:
+        return None
+    energies, transmission = value
+    return _to_1d_array(energies), _to_1d_array(transmission)
+
+
+class EnergyResolution(BaseModel):
     """Energy-resolution metrics of the transmitted beam, in electron-volts.
 
     Any field is ``None`` when the downloaded result file omits it.
     """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     fwhm_eV: float | None = None
     """Full width at half maximum of the exit-energy distribution (eV)."""
@@ -50,12 +93,13 @@ class EnergyResolution:
     """Standard deviation of the exit energy (eV)."""
 
 
-@dataclass(frozen=True)
-class PSF:
+class PSF(BaseModel):
     """Point-spread metrics of the transmitted beam at the exit plane.
 
     Any field is ``None`` when the downloaded result file omits it.
     """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     mean_x: float | None = None
     """Mean exit position (metres)."""
@@ -65,12 +109,13 @@ class PSF:
     """Full width at half maximum of the exit-position distribution (metres)."""
 
 
-@dataclass(frozen=True)
-class ResultSummary:
+class ResultSummary(BaseModel):
     """Scalar metrics reported in a downloaded run result file.
 
     Fields default to ``None`` when the file omits them.
     """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     n_total: int | None = None
     """Number of particles launched."""
@@ -84,13 +129,14 @@ class ResultSummary:
     """Point-spread metrics at the exit plane, or ``None`` when absent."""
 
 
-@dataclass(frozen=True)
-class Trajectory:
+class Trajectory(BaseModel):
     """A single particle's stored path through the column.
 
     ``positions`` and ``times`` are ``None`` when the file did not store them
     for this particle.
     """
+
+    model_config = ConfigDict(frozen=True, extra="ignore", arbitrary_types_allowed=True)
 
     transmitted: bool | None = None
     """Whether the particle reached the exit plane."""
@@ -98,42 +144,57 @@ class Trajectory:
     """Why the particle stopped (e.g. reached the exit, struck an electrode)."""
     n_steps: int | None = None
     """Number of integration steps stored for this particle."""
-    positions: np.ndarray | None = None
+    positions: Annotated[np.ndarray | None, BeforeValidator(_to_positions)] = None
     """Stored positions as an ``(N, 2)`` or ``(N, 3)`` float array, or ``None``."""
-    times: np.ndarray | None = None
+    times: Annotated[np.ndarray | None, BeforeValidator(_to_optional_1d_array)] = None
     """Stored step times as a 1-D float array, or ``None``."""
 
 
-@dataclass(frozen=True)
-class RunResultData:
+def _empty_array() -> np.ndarray:
+    return np.asarray([], dtype=float)
+
+
+class RunResultData(BaseModel):
     """Parsed contents of a downloaded run result file.
 
     Build one with :func:`load_result`. Scalar metrics live on :attr:`summary`;
     per-particle quantities are numpy arrays; per-particle paths (when the file
     stored them) are :class:`Trajectory` objects on :attr:`trajectories`.
+
+    Which per-particle arrays were actually present in the source file is read
+    from ``model_fields_set`` -- an absent array reads as an empty array but is
+    excluded from the assembled DataFrames.
     """
 
-    summary: ResultSummary
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    summary: ResultSummary = Field(default_factory=ResultSummary)
     """Scalar run metrics (transmission, energy resolution, point spread)."""
-    exit_positions: np.ndarray
+    exit_positions: Annotated[np.ndarray, BeforeValidator(_to_1d_array)] = Field(
+        default_factory=_empty_array
+    )
     """Exit position per transmitted particle (metres); empty when absent."""
-    exit_energies: np.ndarray
+    exit_energies: Annotated[np.ndarray, BeforeValidator(_to_1d_array)] = Field(
+        default_factory=_empty_array
+    )
     """Exit energy per transmitted particle (eV); empty when absent."""
-    input_energies: np.ndarray
+    input_energies: Annotated[np.ndarray, BeforeValidator(_to_1d_array)] = Field(
+        default_factory=_empty_array
+    )
     """Input energy per launched particle (eV); empty when absent."""
-    transmission_curve: tuple[np.ndarray, np.ndarray] | None = None
+    transmission_curve: Annotated[
+        tuple[np.ndarray, np.ndarray] | None, BeforeValidator(_to_curve)
+    ] = None
     """``(energies, transmission)`` arrays of the transmission curve, or ``None``."""
-    trajectories: list[Trajectory] = field(default_factory=list)
+    trajectories: list[Trajectory] = Field(default_factory=list)
     """Per-particle stored paths; empty when the file stored none."""
-    _present: frozenset[str] = field(default_factory=frozenset, repr=False)
-    """Names of the per-particle array fields present in the source file."""
 
     def _exit_columns(self) -> dict[str, np.ndarray]:
         """Collect the present exit columns, checking they share a row count."""
         exit_cols: dict[str, np.ndarray] = {}
-        if "exit_energies" in self._present:
+        if "exit_energies" in self.model_fields_set:
             exit_cols["exit_energy"] = self.exit_energies
-        if "exit_positions" in self._present:
+        if "exit_positions" in self.model_fields_set:
             exit_cols["exit_position"] = self.exit_positions
         exit_lengths = {len(v) for v in exit_cols.values()}
         if len(exit_lengths) > 1:
@@ -198,7 +259,7 @@ class RunResultData:
         pd = _require_pandas()
 
         exit_cols = self._exit_columns()
-        has_input = "input_energies" in self._present
+        has_input = "input_energies" in self.model_fields_set
 
         n_in = len(self.input_energies) if has_input else None
         exit_lengths = {len(v) for v in exit_cols.values()}
@@ -236,7 +297,9 @@ def _reject_non_finite(literal: str) -> float:
 
     Passed as ``json.load(parse_constant=...)`` so these literals -- which
     standard JSON forbids -- fail loudly at parse time rather than slipping into
-    result arrays or scalars as silent bad data.
+    result arrays or scalars as silent bad data. Rejecting at the parse boundary
+    covers every field uniformly (scalars, per-particle arrays, and trajectory
+    positions alike), which a per-field validator could not do as completely.
     """
     raise ValueError(
         f"result file contains a non-finite JSON literal {literal!r}; "
@@ -244,121 +307,15 @@ def _reject_non_finite(literal: str) -> float:
     )
 
 
-def _coerce_scalar(value: Any, field: str, cast: type[_Number]) -> _Number | None:
-    """Coerce a scalar metric through ``cast``, naming ``field`` on failure.
-
-    ``None`` passes through unchanged. Anything ``cast`` cannot accept (e.g. a
-    string where a number is expected) raises loudly at parse time, naming the
-    field, rather than surfacing later as a cryptic formatting error.
-    """
-    if value is None:
-        return None
-    try:
-        return cast(value)
-    except (TypeError, ValueError) as exc:
-        raise type(exc)(
-            f"summary field {field!r} could not be coerced to "
-            f"{cast.__name__}: {value!r}"
-        ) from exc
-
-
-def _as_float_array(value: Any) -> np.ndarray:
-    """Coerce a JSON list (or ``None``) into a 1-D float array."""
-    if value is None:
-        return np.asarray([], dtype=float)
-    return np.asarray(value, dtype=float)
-
-
-def _parse_energy_resolution(data: Any) -> EnergyResolution | None:
-    if not isinstance(data, dict):
-        return None
-    return EnergyResolution(
-        fwhm_eV=_coerce_scalar(data.get("fwhm_eV"), "energy_resolution.fwhm_eV", float),
-        mean_eV=_coerce_scalar(data.get("mean_eV"), "energy_resolution.mean_eV", float),
-        std_eV=_coerce_scalar(data.get("std_eV"), "energy_resolution.std_eV", float),
-    )
-
-
-def _parse_psf(data: Any) -> PSF | None:
-    if not isinstance(data, dict):
-        return None
-    return PSF(
-        mean_x=_coerce_scalar(data.get("mean_x"), "psf.mean_x", float),
-        std_x=_coerce_scalar(data.get("std_x"), "psf.std_x", float),
-        fwhm_x=_coerce_scalar(data.get("fwhm_x"), "psf.fwhm_x", float),
-    )
-
-
-def _parse_transmission_curve(data: Any) -> tuple[np.ndarray, np.ndarray] | None:
+def _present_curve(data: Any) -> tuple[Any, Any] | None:
+    """Return the raw ``(energies, transmission)`` pair, or ``None`` when absent."""
     if not isinstance(data, dict):
         return None
     energies = data.get("energies")
     transmission = data.get("transmission")
     if energies is None or transmission is None:
         return None
-    return _as_float_array(energies), _as_float_array(transmission)
-
-
-def _parse_positions(value: Any) -> np.ndarray | None:
-    if value is None:
-        return None
-    arr = np.asarray(value, dtype=float)
-    if arr.size == 0:
-        return arr.reshape(0, 2)
-    if arr.ndim != 2 or arr.shape[1] not in (2, 3):
-        raise ValueError(
-            "trajectory positions must be a 2-D array with 2 or 3 columns "
-            f"(N, 2) or (N, 3); got array of shape {arr.shape}"
-        )
-    return arr
-
-
-def _parse_trajectory(data: Any) -> Trajectory:
-    if not isinstance(data, dict):
-        return Trajectory()
-    times = data.get("times")
-    return Trajectory(
-        transmitted=data.get("transmitted"),
-        reason=data.get("reason"),
-        n_steps=data.get("n_steps"),
-        positions=_parse_positions(data.get("positions")),
-        times=None if times is None else _as_float_array(times),
-    )
-
-
-def _from_summary(
-    summary: dict[str, Any],
-) -> tuple[
-    ResultSummary,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    tuple[np.ndarray, np.ndarray] | None,
-    frozenset[str],
-]:
-    """Parse a summary mapping into its typed pieces and array-presence set."""
-    result_summary = ResultSummary(
-        n_total=_coerce_scalar(summary.get("n_total"), "n_total", int),
-        n_transmitted=_coerce_scalar(
-            summary.get("n_transmitted"), "n_transmitted", int
-        ),
-        transmission=_coerce_scalar(summary.get("transmission"), "transmission", float),
-        energy_resolution=_parse_energy_resolution(summary.get("energy_resolution")),
-        psf=_parse_psf(summary.get("psf")),
-    )
-    present = frozenset(
-        key
-        for key in ("exit_positions", "exit_energies", "input_energies")
-        if summary.get(key) is not None
-    )
-    return (
-        result_summary,
-        _as_float_array(summary.get("exit_positions")),
-        _as_float_array(summary.get("exit_energies")),
-        _as_float_array(summary.get("input_energies")),
-        _parse_transmission_curve(summary.get("transmission_curve")),
-        present,
-    )
+    return energies, transmission
 
 
 def load_result(path: str | Path) -> RunResultData:
@@ -366,7 +323,8 @@ def load_result(path: str | Path) -> RunResultData:
 
     Accepts either result-file shape -- a bare summary document or a full
     document with a ``summary`` block and an optional ``trajectories`` list --
-    and tolerates missing or null optional fields.
+    and tolerates missing or null optional fields. A malformed field raises a
+    :class:`pydantic.ValidationError` (a :class:`ValueError`) naming the field.
 
     :param path: Path to a downloaded result file (JSON).
     """
@@ -377,36 +335,37 @@ def load_result(path: str | Path) -> RunResultData:
 
     inner = document.get("summary")
     if isinstance(inner, dict):
-        summary_data = inner
+        summary_doc = inner
         trajectories_data = document.get("trajectories")
     else:
-        summary_data = document
+        summary_doc = document
         trajectories_data = None
 
-    (
-        summary,
-        exit_positions,
-        exit_energies,
-        input_energies,
-        transmission_curve,
-        present,
-    ) = _from_summary(summary_data)
+    fields: dict[str, Any] = {
+        "summary": {
+            "n_total": summary_doc.get("n_total"),
+            "n_transmitted": summary_doc.get("n_transmitted"),
+            "transmission": summary_doc.get("transmission"),
+            "energy_resolution": summary_doc.get("energy_resolution"),
+            "psf": summary_doc.get("psf"),
+        },
+    }
+    # Only present, non-null per-particle arrays are passed through, so
+    # ``model_fields_set`` reflects which arrays the source file actually
+    # carried (a null field reads as absent, matching an omitted one).
+    for key in ("exit_positions", "exit_energies", "input_energies"):
+        value = summary_doc.get(key)
+        if value is not None:
+            fields[key] = value
 
-    trajectories = (
-        [_parse_trajectory(t) for t in trajectories_data]
-        if isinstance(trajectories_data, list)
-        else []
-    )
+    curve = _present_curve(summary_doc.get("transmission_curve"))
+    if curve is not None:
+        fields["transmission_curve"] = curve
 
-    return RunResultData(
-        summary=summary,
-        exit_positions=exit_positions,
-        exit_energies=exit_energies,
-        input_energies=input_energies,
-        transmission_curve=transmission_curve,
-        trajectories=trajectories,
-        _present=present,
-    )
+    if isinstance(trajectories_data, list):
+        fields["trajectories"] = trajectories_data
+
+    return RunResultData.model_validate(fields)
 
 
 __all__ = [

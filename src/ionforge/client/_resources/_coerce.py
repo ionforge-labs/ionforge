@@ -11,7 +11,7 @@ signatures friendly and the request construction type-correct.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -27,11 +27,21 @@ def to_enum(enum_cls: type[_EnumT], value: _EnumT | str | None) -> _EnumT | None
     return enum_cls(value)
 
 
+@overload
+def to_model(model_cls: type[_ModelT], value: None) -> None: ...
+
+
+@overload
+def to_model(model_cls: type[_ModelT], value: object) -> _ModelT: ...
+
+
 def to_model(model_cls: type[_ModelT], value: object) -> _ModelT | None:
     """Coerce a model instance or a plain ``dict`` into *model_cls* (``None`` passes).
 
     ``value`` is typed as ``object`` so the model type is inferred solely from
-    *model_cls*; callers pass a ``model_cls | dict | None`` ergonomic union.
+    *model_cls*; callers pass a ``model_cls | dict | None`` ergonomic union. The
+    overloads narrow the result to non-``None`` for a non-``None`` argument, so a
+    required request field stays type-correct without an extra guard.
     """
     if value is None:
         return None
