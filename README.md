@@ -258,6 +258,8 @@ with IonForge() as client:  # reads IONFORGE_API_KEY
 
 An `AsyncIonForge` client with the same surface is available for asyncio code.
 
+See [`examples/run_simulation.py`](examples/run_simulation.py) for a complete, runnable end-to-end workflow that builds an einzel lens, uploads it, runs a simulation, and downloads the results.
+
 ## Development
 
 ```bash
