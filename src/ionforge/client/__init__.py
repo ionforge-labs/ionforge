@@ -96,6 +96,14 @@ from ._resources import (
 )
 from ._resources.sweeps import GeometryAxis, ParamAxis, SweepAxis
 from ._transport import AsyncTransport, SyncTransport
+from .results_io import (
+    PSF,
+    EnergyResolution,
+    ResultSummary,
+    RunResultData,
+    Trajectory,
+    load_result,
+)
 
 
 class IonForge:
@@ -235,7 +243,13 @@ class IonForge:
         *,
         output_dir: str | Path = ".",
     ) -> list[Path]:
-        """Download all result files for a completed run."""
+        """Download all result files for a completed run.
+
+        Writes each result file to *output_dir* and returns their paths. Parse a
+        downloaded file into numpy arrays and pandas frames with
+        :func:`ionforge.client.load_result`, or use :meth:`load_results` to
+        download and parse in one call.
+        """
         import httpx
 
         output_path = Path(output_dir)
@@ -253,6 +267,20 @@ class IonForge:
                         f.write(chunk)
             downloaded.append(dest)
         return downloaded
+
+    def load_results(
+        self,
+        run_id: str,
+        *,
+        output_dir: str | Path = ".",
+    ) -> list[RunResultData]:
+        """Download a run's result files and parse each into a ``RunResultData``.
+
+        Convenience wrapper over :meth:`download_results` followed by
+        :func:`ionforge.client.load_result` on every downloaded file.
+        """
+        paths = self.download_results(run_id, output_dir=output_dir)
+        return [load_result(path) for path in paths]
 
     # -- Context manager ----------------------------------------------------
 
@@ -404,7 +432,13 @@ class AsyncIonForge:
         *,
         output_dir: str | Path = ".",
     ) -> list[Path]:
-        """Download all result files for a completed run."""
+        """Download all result files for a completed run.
+
+        Writes each result file to *output_dir* and returns their paths. Parse a
+        downloaded file into numpy arrays and pandas frames with
+        :func:`ionforge.client.load_result`, or use :meth:`load_results` to
+        download and parse in one call.
+        """
         import httpx
 
         output_path = Path(output_dir)
@@ -423,6 +457,20 @@ class AsyncIonForge:
                             f.write(chunk)
                 downloaded.append(dest)
         return downloaded
+
+    async def load_results(
+        self,
+        run_id: str,
+        *,
+        output_dir: str | Path = ".",
+    ) -> list[RunResultData]:
+        """Download a run's result files and parse each into a ``RunResultData``.
+
+        Convenience wrapper over :meth:`download_results` followed by
+        :func:`ionforge.client.load_result` on every downloaded file.
+        """
+        paths = await self.download_results(run_id, output_dir=output_dir)
+        return [load_result(path) for path in paths]
 
     # -- Context manager ----------------------------------------------------
 
@@ -475,6 +523,13 @@ __all__ = [
     "SweepResults",
     "ParamAxis",
     "GeometryAxis",
+    # Result-file loaders
+    "load_result",
+    "RunResultData",
+    "ResultSummary",
+    "EnergyResolution",
+    "PSF",
+    "Trajectory",
     # Exceptions
     "APIError",
     "AuthenticationError",
