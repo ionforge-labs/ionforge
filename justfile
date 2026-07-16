@@ -49,10 +49,11 @@ example name:
 
 # --- Client codegen ---
 
-# Generate Pydantic models from an OpenAPI spec
+# Generate Pydantic models from an OpenAPI spec (filters to core SDK resources first)
 codegen spec:
+    uv run python scripts/filter_openapi.py {{ spec }} openapi-filtered.json
     uv run datamodel-codegen \
-        --input {{ spec }} \
+        --input openapi-filtered.json \
         --input-file-type openapi \
         --output src/ionforge/_types/_generated.py \
         --output-model-type pydantic_v2.BaseModel \
@@ -63,7 +64,10 @@ codegen spec:
         --target-python-version 3.11 \
         --openapi-scopes schemas paths \
         --use-operation-id-as-name \
+        --use-annotated \
+        --field-constraints \
         --formatters ruff-format ruff-check
+    rm -f openapi-filtered.json
     @echo "Generated src/ionforge/_types/_generated.py"
 
 # Run all checks
