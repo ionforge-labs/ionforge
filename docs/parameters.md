@@ -16,7 +16,7 @@ meaning, and when you would change it.
 | `ensemble` | `EnsembleParams` | Where particles terminate and how they are scored |
 | `space_charge` | `SpaceChargeParams` | Optional self-consistent space-charge solve |
 | `magnetic_field` | `MagneticFieldParams` | Optional static magnetic field from coils |
-| `symmetry` | `Symmetry` (mirror) | Mirror-plane symmetry hints for the solver |
+| `symmetry` | mirror hint (`mirrorMode`) | Mirror-plane symmetry hints for the solver |
 | `fast_adjust` | `FastAdjust` | Per-electrode voltage overrides |
 | `callbacks` | `Callbacks` | Per-step forces and time-varying drives |
 
@@ -84,7 +84,7 @@ Selects the field solver and its discretisation.
 |---|---|---|
 | `fd` | Finite difference, axisymmetric grid | Rotationally symmetric geometries on an (r, z) grid |
 | `fd_3d` | Finite difference, 3-D grid | Fully 3-D geometries with no exploitable symmetry |
-| `bem_2d` | Boundary element, 2-D | 2-D boundary-element formulation for rotationally symmetric problems; prefer the explicit `bem_axisym` for new work |
+| `bem_2d` | Boundary element, 2-D | Accepted alias for the axisymmetric boundary-element formulation; use `bem_axisym` for new work |
 | `bem_3d` | Boundary element, 3-D | 3-D geometries where a surface method is preferable to a volume grid |
 | `bem_axisym` | Boundary element, axisymmetric | Rotationally symmetric lenses (the einzel-lens example uses this) |
 | `hybrid` | Combined approach | Setups the platform routes through more than one method |
@@ -92,7 +92,8 @@ Selects the field solver and its discretisation.
 ### `resolution` — `Resolution`
 
 Every field is optional (`None` = solver default). Which knobs apply depends on
-`solver_type`; set only the ones relevant to your solver.
+`solver_type`; set only the ones relevant to your solver — knobs that do not
+apply to the selected solver are ignored.
 
 | Field | Type | Default | Applies to | Meaning |
 |---|---|---|---|---|
@@ -127,11 +128,11 @@ energy and the specified spreads.
 | `n_particles` | int > 0 | `100` | — | Number of particles in the ensemble. More particles reduce statistical noise in scored metrics at the cost of runtime. |
 | `seed` | int | `42` | — | RNG seed for sampling the energy and angular spreads. A fixed seed makes a run reproducible; vary it to resample the same distribution. |
 
-**Note on `position` / `direction`.** These are coordinate lists in the
-solver's working plane rather than full 3-D geometry coordinates, so the axis
-mapping is solver-specific; treat the default (`[-0.05, 0]`, source upstream on
-the axis) as the reference and adjust relative to it. See the solver
-documentation if you need an off-axis or angled source.
+**Note on `position` / `direction`.** These are 2-element coordinate lists in
+the solver's 2-D solve frame rather than full 3-D geometry coordinates. For
+the axisymmetric solvers the default `[-0.05, 0]` places the source on the
+optical axis, 50 mm upstream. Treat the default as the reference and adjust
+relative to it; see also "Where particles are scored" under `ensemble`.
 
 ## `integrator` — `IntegratorParams`
 
@@ -158,14 +159,17 @@ Defines where particles terminate and how they are scored.
 
 | Field | Type | Default | Units | Meaning |
 |---|---|---|---|---|
-| `exit_plane` | enum (**required**) | — | — | The plane crossing that terminates and scores a particle: `y_cross_zero` (particle crosses the plane) or `y_cross_positive` (crosses in the positive direction). Selects the scoring surface for the run. |
-| `slit_centre` | float | `None` | m | Centre of a scoring slit at the exit plane. `None` = no slit. |
+| `exit_plane` | enum (**required**) | — | — | Selects the exit-scoring rule (see below). |
+| `slit_centre` | float | `None` | m | Centre of a scoring slit at the exit, measured along the scoring line (the optical axis for axisymmetric solvers). `None` = no slit. |
 | `slit_half_width` | float | `None` | m | Half-width of the scoring slit. Particles outside the slit are counted as blocked; use with `slit_centre` to model an aperture/detector slit. |
 | `store_trajectories` | bool | `False` | — | Persist full trajectories (subject to `store_every`) alongside scored metrics. Enable for visualisation/debugging; leave off for large ensembles. |
 
-The `exit_plane` values are named after a `y`-coordinate crossing in the
-solver's scoring frame; if in doubt about the frame relative to your geometry's
-z axis, confirm against the solver documentation.
+**Where particles are scored.** For the axisymmetric solvers a particle is
+scored where its ray crosses the optical (z) axis — the natural rule for
+focal-length and analyser measurements. The recorded exit position is the
+axial coordinate of that crossing, and the slit fields select a window around
+it along the axis. For other solver types the scoring plane follows the
+solver's 2-D solve frame.
 
 ## `space_charge` — `SpaceChargeParams`
 
@@ -264,7 +268,7 @@ V(t) = V_dc + V_rf · cos(omega · t + phase)
 
 | Field | Type | Default | Units | Meaning |
 |---|---|---|---|---|
-| `electrode` | str (non-empty) | **required** | — | Name of the driven electrode. **It must be declared in `fast_adjust.electrodes`.** |
+| `electrode` | str (non-empty) | **required** | — | Name of the driven electrode. **It must be declared in `fast_adjust.electrodes`** — a drive referencing an undeclared electrode is rejected when the run starts. |
 | `v_dc` (`V_dc`) | float | **required** | V | DC offset of the drive. |
 | `v_rf` (`V_rf`) | float | **required** | V | RF amplitude (peak). |
 | `omega` | float > 0 | **required** | rad/s | Angular frequency (not Hz: `omega = 2π·f`). |
