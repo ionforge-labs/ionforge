@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from ionforge._types._generated import (
     CreateModelRunRequest,
+    Kind,
     ModelParams,
     Run,
     Status,
@@ -53,9 +54,8 @@ class ModelRuns(BaseSyncResource):
         *,
         name: str | None = None,
         params: ModelParams | dict[str, Any] | None = None,
-        kind: str | None = None,
+        kind: Kind | str | None = None,
         parent_run_id: str | None = None,
-        image_variant: str | None = None,
     ) -> Run:
         """Launch a run for this model."""
         data = self._post(
@@ -65,7 +65,6 @@ class ModelRuns(BaseSyncResource):
                 params=params,
                 kind=kind,
                 parent_run_id=parent_run_id,
-                image_variant=image_variant,
             ),
         )
         return Run.model_validate(data)
@@ -114,9 +113,8 @@ class AsyncModelRuns(BaseAsyncResource):
         *,
         name: str | None = None,
         params: ModelParams | dict[str, Any] | None = None,
-        kind: str | None = None,
+        kind: Kind | str | None = None,
         parent_run_id: str | None = None,
-        image_variant: str | None = None,
     ) -> Run:
         """Launch a run for this model."""
         data = await self._post(
@@ -126,7 +124,6 @@ class AsyncModelRuns(BaseAsyncResource):
                 params=params,
                 kind=kind,
                 parent_run_id=parent_run_id,
-                image_variant=image_variant,
             ),
         )
         return Run.model_validate(data)

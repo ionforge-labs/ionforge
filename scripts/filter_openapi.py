@@ -38,9 +38,39 @@ ALLOWED_PATHS: frozenset[str] = frozenset(
 # Path prefixes the SDK covers in full (runs and sweeps sub-resources).
 ALLOWED_PREFIXES: tuple[str, ...] = ("/runs", "/sweeps")
 
+# Object properties the SDK does not cover and therefore strips from every
+# request and response schema. Removing a property here also drops it from any
+# sibling ``required`` list, so a schema that existed only to type that property
+# becomes unreferenced and is pruned by the reachability pass below.
+STRIPPED_PROPERTIES: frozenset[str] = frozenset({"imageVariant"})
+
 
 def _is_allowed(path: str) -> bool:
     return path in ALLOWED_PATHS or path.startswith(ALLOWED_PREFIXES)
+
+
+def _strip_properties(node: Any) -> None:
+    """Recursively delete :data:`STRIPPED_PROPERTIES` from *node* in place.
+
+    Whenever a schema object declares one of the stripped properties, the
+    property is removed from its ``properties`` map and from any sibling
+    ``required`` list.
+    """
+    if isinstance(node, dict):
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            removed = [name for name in STRIPPED_PROPERTIES if name in properties]
+            for name in removed:
+                del properties[name]
+            if removed and isinstance(node.get("required"), list):
+                node["required"] = [
+                    name for name in node["required"] if name not in STRIPPED_PROPERTIES
+                ]
+        for value in node.values():
+            _strip_properties(value)
+    elif isinstance(node, list):
+        for item in node:
+            _strip_properties(item)
 
 
 # HTTP methods that carry operations (as opposed to shared parameters, etc.).
@@ -103,6 +133,9 @@ def _reachable_schemas(seeds: set[str], schemas: dict[str, Any]) -> set[str]:
 
 def filter_spec(spec: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of *spec* limited to the SDK's core resources."""
+    spec = json.loads(json.dumps(spec))
+    _strip_properties(spec)
+
     paths = {
         path: _strip_error_responses(item)
         for path, item in spec.get("paths", {}).items()

@@ -11,6 +11,9 @@ from ionforge._types._generated import (
     CreateModelSweepRequest,
     GetSweepAggregateResponse,
     ListSweepResultsResponse,
+    ObjectiveDirection,
+    ObjectiveMetric,
+    Strategy,
     Sweep,
 )
 
@@ -19,8 +22,16 @@ from .._pagination import AsyncPageIterator, PageIterator
 from .._transport import AsyncTransport, SyncTransport
 from ._base import BaseAsyncResource, BaseSyncResource
 
-# An axis is a param- or geometry-valued dimension of the sweep.
-SweepAxis = Axes | Axes1 | dict[str, Any]
+# Public, readable aliases for the codegen axis models. A sweep axis varies
+# either a model parameter (``ParamAxis``) or a geometry parameter
+# (``GeometryAxis``) across a range of values.
+ParamAxis = Axes
+"""A sweep axis that varies a model parameter (``kind="param"``)."""
+GeometryAxis = Axes1
+"""A sweep axis that varies a geometry parameter (``kind="geometry"``)."""
+
+# An axis is a ``ParamAxis``- or ``GeometryAxis``-valued dimension of the sweep.
+SweepAxis = ParamAxis | GeometryAxis | dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
@@ -43,10 +54,10 @@ class ModelSweeps(BaseSyncResource):
         *,
         axes: list[SweepAxis],
         name: str | None = None,
-        strategy: str | None = None,
+        strategy: Strategy | str | None = None,
         random_count: int | None = None,
-        objective_metric: str | None = None,
-        objective_direction: str | None = None,
+        objective_metric: ObjectiveMetric | str | None = None,
+        objective_direction: ObjectiveDirection | str | None = None,
         parent_sweep_id: str | None = None,
     ) -> Sweep:
         """Create a parameter sweep for this model."""
@@ -80,10 +91,10 @@ class AsyncModelSweeps(BaseAsyncResource):
         *,
         axes: list[SweepAxis],
         name: str | None = None,
-        strategy: str | None = None,
+        strategy: Strategy | str | None = None,
         random_count: int | None = None,
-        objective_metric: str | None = None,
-        objective_direction: str | None = None,
+        objective_metric: ObjectiveMetric | str | None = None,
+        objective_direction: ObjectiveDirection | str | None = None,
         parent_sweep_id: str | None = None,
     ) -> Sweep:
         """Create a parameter sweep for this model."""

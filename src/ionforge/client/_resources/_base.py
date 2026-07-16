@@ -12,7 +12,7 @@ from .._transport import AsyncTransport, SyncTransport
 def _serialize(obj: Any) -> Any:
     """Serialize a value for JSON transport, respecting camelCase aliases."""
     if isinstance(obj, BaseModel):
-        return obj.model_dump(by_alias=True, exclude_none=True)
+        return obj.model_dump(by_alias=True, exclude_none=True, mode="json")
     return obj
 
 

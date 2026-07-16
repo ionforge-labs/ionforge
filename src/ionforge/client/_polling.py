@@ -11,8 +11,8 @@ if TYPE_CHECKING:
     from ._resources.runs import AsyncRuns, Runs
     from ._resources.sweeps import AsyncSweeps, Sweeps
 
-_TERMINAL_RUN_STATUSES = {"completed", "failed"}
-_TERMINAL_SWEEP_STATUSES = {"completed", "failed"}
+_TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled"}
+_TERMINAL_SWEEP_STATUSES = {"completed", "failed", "cancelled"}
 
 
 def poll_run(

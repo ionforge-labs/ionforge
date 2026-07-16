@@ -44,19 +44,24 @@ from ionforge._types._generated import (
     GetGeometryResponse,
     GetSweepAggregateResponse,
     IntegratorParams,
+    Kind,
     ListSweepResultsResponse,
     MagneticFieldParams,
     Model,
     ModelParams,
     ModelWithCounts,
+    ObjectiveDirection,
+    ObjectiveMetric,
     PresignUploadResponse,
     Project,
     ProjectWithCounts,
     Result,
     Run,
+    SimulatorType,
     SolverParams,
     SpaceChargeParams,
     Status,
+    Strategy,
     Sweep,
 )
 
@@ -88,7 +93,7 @@ from ._resources import (
     Sweeps,
     Uploads,
 )
-from ._resources.sweeps import SweepAxis
+from ._resources.sweeps import GeometryAxis, ParamAxis, SweepAxis
 from ._transport import AsyncTransport, SyncTransport
 
 
@@ -160,9 +165,9 @@ class IonForge:
         name: str,
         geometry_id: str | None = None,
         params: ModelParams | dict[str, Any] | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
         run_name: str | None = None,
-        kind: str | None = None,
+        kind: Kind | str | None = None,
         wait: bool = True,
         poll_interval: float = 2.0,
         poll_timeout: float = 600.0,
@@ -171,6 +176,9 @@ class IonForge:
 
         Creates a model in *project_id*, launches a run against it, and (when
         *wait* is true) polls the run until it reaches a terminal state.
+
+        The run inherits the model's *params*; to override parameters at the
+        run level, use :meth:`ModelRuns.create` directly.
         """
         model = self.models.create(
             project_id=project_id,
@@ -179,7 +187,7 @@ class IonForge:
             params=params,
             simulator_type=simulator_type,
         )
-        run = self.models.runs(model.id).create(name=run_name, params=params, kind=kind)
+        run = self.models.runs(model.id).create(name=run_name, kind=kind)
         if wait:
             return poll_run(
                 self.runs,
@@ -195,9 +203,9 @@ class IonForge:
         *,
         axes: list[SweepAxis],
         name: str | None = None,
-        strategy: str | None = None,
-        objective_metric: str | None = None,
-        objective_direction: str | None = None,
+        strategy: Strategy | str | None = None,
+        objective_metric: ObjectiveMetric | str | None = None,
+        objective_direction: ObjectiveDirection | str | None = None,
         wait: bool = True,
         poll_interval: float = 5.0,
         poll_timeout: float = 3600.0,
@@ -325,9 +333,9 @@ class AsyncIonForge:
         name: str,
         geometry_id: str | None = None,
         params: ModelParams | dict[str, Any] | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
         run_name: str | None = None,
-        kind: str | None = None,
+        kind: Kind | str | None = None,
         wait: bool = True,
         poll_interval: float = 2.0,
         poll_timeout: float = 600.0,
@@ -336,6 +344,9 @@ class AsyncIonForge:
 
         Creates a model in *project_id*, launches a run against it, and (when
         *wait* is true) polls the run until it reaches a terminal state.
+
+        The run inherits the model's *params*; to override parameters at the
+        run level, use :meth:`AsyncModelRuns.create` directly.
         """
         model = await self.models.create(
             project_id=project_id,
@@ -344,9 +355,7 @@ class AsyncIonForge:
             params=params,
             simulator_type=simulator_type,
         )
-        run = await self.models.runs(model.id).create(
-            name=run_name, params=params, kind=kind
-        )
+        run = await self.models.runs(model.id).create(name=run_name, kind=kind)
         if wait:
             return await async_poll_run(
                 self.runs,
@@ -362,9 +371,9 @@ class AsyncIonForge:
         *,
         axes: list[SweepAxis],
         name: str | None = None,
-        strategy: str | None = None,
-        objective_metric: str | None = None,
-        objective_direction: str | None = None,
+        strategy: Strategy | str | None = None,
+        objective_metric: ObjectiveMetric | str | None = None,
+        objective_direction: ObjectiveDirection | str | None = None,
         wait: bool = True,
         poll_interval: float = 5.0,
         poll_timeout: float = 3600.0,
@@ -434,6 +443,8 @@ __all__ = [
     "Status",
     "Sweep",
     "SweepAxis",
+    "ParamAxis",
+    "GeometryAxis",
     # Exceptions
     "APIError",
     "AuthenticationError",

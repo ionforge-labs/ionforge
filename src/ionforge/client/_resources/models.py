@@ -11,6 +11,7 @@ from ionforge._types._generated import (
     Model,
     ModelParams,
     ModelWithCounts,
+    SimulatorType,
     UpdateModelRequest,
 )
 
@@ -27,7 +28,7 @@ def _list_params(
     limit: int = 25,
     offset: int = 0,
     search: str | None = None,
-    simulator_type: str | None = None,
+    simulator_type: SimulatorType | str | None = None,
 ) -> dict[str, object]:
     params: dict[str, object] = {"limit": limit, "offset": offset}
     if project_id is not None:
@@ -48,7 +49,7 @@ class Models(BaseSyncResource):
         project_id: str,
         name: str,
         description: str | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
         geometry_id: str | None = None,
         params: ModelParams | dict[str, Any] | None = None,
         is_template: bool | None = None,
@@ -75,7 +76,7 @@ class Models(BaseSyncResource):
         limit: int = 25,
         offset: int = 0,
         search: str | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
     ) -> Page[Model]:
         """List models (paginated)."""
         data = self._get(
@@ -95,7 +96,7 @@ class Models(BaseSyncResource):
         *,
         project_id: str | None = None,
         search: str | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
         page_size: int = 25,
     ) -> Iterator[Model]:
         """Iterate over all models, fetching pages automatically."""
@@ -192,7 +193,7 @@ class AsyncModels(BaseAsyncResource):
         project_id: str,
         name: str,
         description: str | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
         geometry_id: str | None = None,
         params: ModelParams | dict[str, Any] | None = None,
         is_template: bool | None = None,
@@ -219,7 +220,7 @@ class AsyncModels(BaseAsyncResource):
         limit: int = 25,
         offset: int = 0,
         search: str | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
     ) -> Page[Model]:
         """List models (paginated)."""
         data = await self._get(
@@ -239,7 +240,7 @@ class AsyncModels(BaseAsyncResource):
         *,
         project_id: str | None = None,
         search: str | None = None,
-        simulator_type: str | None = None,
+        simulator_type: SimulatorType | str | None = None,
         page_size: int = 25,
     ) -> AsyncPageIterator[Model]:
         """Iterate over all models, fetching pages automatically."""
