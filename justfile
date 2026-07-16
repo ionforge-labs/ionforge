@@ -67,6 +67,8 @@ codegen spec:
         --use-annotated \
         --field-constraints \
         --formatters ruff-format ruff-check
+    uv run python scripts/postprocess_generated.py src/ionforge/_types/_generated.py
+    uv run ruff format src/ionforge/_types/_generated.py
     rm -f openapi-filtered.json
     @echo "Generated src/ionforge/_types/_generated.py"
 
