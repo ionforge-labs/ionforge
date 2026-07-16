@@ -1,4 +1,4 @@
-"""Jobs resource."""
+"""Runs resource."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from ionforge._types._generated import (
-    CreateSimulationJobRequest,
-    Job,
-    SimulationParams,
+    CreateModelRunRequest,
+    ModelParams,
+    Run,
     Status,
 )
 
@@ -18,7 +18,7 @@ from .._transport import AsyncTransport, SyncTransport
 from ._base import BaseAsyncResource, BaseSyncResource
 
 if TYPE_CHECKING:
-    from .results import AsyncJobResults, JobResults
+    from .results import AsyncRunResults, RunResults
 
 
 def _list_params(
@@ -34,32 +34,41 @@ def _list_params(
 
 
 # ---------------------------------------------------------------------------
-# Simulation-scoped jobs
+# Model-scoped runs
 # ---------------------------------------------------------------------------
 
 
-class SimulationJobs(BaseSyncResource):
-    """Jobs scoped to a specific simulation (sync)."""
+class ModelRuns(BaseSyncResource):
+    """Runs scoped to a specific model (sync)."""
 
-    def __init__(self, transport: SyncTransport, simulation_id: str) -> None:
+    def __init__(self, transport: SyncTransport, model_id: str) -> None:
         super().__init__(transport)
-        self._simulation_id = simulation_id
+        self._model_id = model_id
 
     def _base_path(self) -> str:
-        return f"/simulations/{self._simulation_id}/jobs"
+        return f"/models/{self._model_id}/runs"
 
     def create(
         self,
         *,
         name: str | None = None,
-        params: SimulationParams | dict[str, Any] | None = None,
-    ) -> Job:
-        """Create a job for this simulation."""
+        params: ModelParams | dict[str, Any] | None = None,
+        kind: str | None = None,
+        parent_run_id: str | None = None,
+        image_variant: str | None = None,
+    ) -> Run:
+        """Launch a run for this model."""
         data = self._post(
             self._base_path(),
-            body=CreateSimulationJobRequest(name=name, params=params),
+            body=CreateModelRunRequest(
+                name=name,
+                params=params,
+                kind=kind,
+                parent_run_id=parent_run_id,
+                image_variant=image_variant,
+            ),
         )
-        return Job.model_validate(data)
+        return Run.model_validate(data)
 
     def list(
         self,
@@ -67,21 +76,21 @@ class SimulationJobs(BaseSyncResource):
         status: Status | None = None,
         limit: int = 25,
         offset: int = 0,
-    ) -> Page[Job]:
-        """List jobs for this simulation."""
+    ) -> Page[Run]:
+        """List runs for this model."""
         data = self._get(
             self._base_path(),
             params=_list_params(status=status, limit=limit, offset=offset),
         )
-        return Page[Job].model_validate(data)
+        return Page[Run].model_validate(data)
 
     def list_autopaginate(
         self,
         *,
         status: Status | None = None,
         page_size: int = 25,
-    ) -> Iterator[Job]:
-        """Iterate over all jobs for this simulation."""
+    ) -> Iterator[Run]:
+        """Iterate over all runs for this model."""
         return PageIterator(
             fetch=lambda offset: self.list(
                 status=status, limit=page_size, offset=offset
@@ -90,28 +99,37 @@ class SimulationJobs(BaseSyncResource):
         )
 
 
-class AsyncSimulationJobs(BaseAsyncResource):
-    """Jobs scoped to a specific simulation (async)."""
+class AsyncModelRuns(BaseAsyncResource):
+    """Runs scoped to a specific model (async)."""
 
-    def __init__(self, transport: AsyncTransport, simulation_id: str) -> None:
+    def __init__(self, transport: AsyncTransport, model_id: str) -> None:
         super().__init__(transport)
-        self._simulation_id = simulation_id
+        self._model_id = model_id
 
     def _base_path(self) -> str:
-        return f"/simulations/{self._simulation_id}/jobs"
+        return f"/models/{self._model_id}/runs"
 
     async def create(
         self,
         *,
         name: str | None = None,
-        params: SimulationParams | dict[str, Any] | None = None,
-    ) -> Job:
-        """Create a job for this simulation."""
+        params: ModelParams | dict[str, Any] | None = None,
+        kind: str | None = None,
+        parent_run_id: str | None = None,
+        image_variant: str | None = None,
+    ) -> Run:
+        """Launch a run for this model."""
         data = await self._post(
             self._base_path(),
-            body=CreateSimulationJobRequest(name=name, params=params),
+            body=CreateModelRunRequest(
+                name=name,
+                params=params,
+                kind=kind,
+                parent_run_id=parent_run_id,
+                image_variant=image_variant,
+            ),
         )
-        return Job.model_validate(data)
+        return Run.model_validate(data)
 
     async def list(
         self,
@@ -119,21 +137,21 @@ class AsyncSimulationJobs(BaseAsyncResource):
         status: Status | None = None,
         limit: int = 25,
         offset: int = 0,
-    ) -> Page[Job]:
-        """List jobs for this simulation."""
+    ) -> Page[Run]:
+        """List runs for this model."""
         data = await self._get(
             self._base_path(),
             params=_list_params(status=status, limit=limit, offset=offset),
         )
-        return Page[Job].model_validate(data)
+        return Page[Run].model_validate(data)
 
     def list_autopaginate(
         self,
         *,
         status: Status | None = None,
         page_size: int = 25,
-    ) -> AsyncPageIterator[Job]:
-        """Iterate over all jobs for this simulation."""
+    ) -> AsyncPageIterator[Run]:
+        """Iterate over all runs for this model."""
         return AsyncPageIterator(
             fetch=lambda offset: self.list(
                 status=status, limit=page_size, offset=offset
@@ -143,101 +161,105 @@ class AsyncSimulationJobs(BaseAsyncResource):
 
 
 # ---------------------------------------------------------------------------
-# Top-level jobs (cross-simulation)
+# Top-level runs (cross-model)
 # ---------------------------------------------------------------------------
 
 
-class Jobs(BaseSyncResource):
-    """Top-level jobs resource (cross-simulation, sync)."""
+class Runs(BaseSyncResource):
+    """Top-level runs resource (cross-model, sync)."""
 
     def list(
         self,
         *,
+        project_id: str | None = None,
         status: Status | None = None,
         limit: int = 25,
         offset: int = 0,
-    ) -> Page[Job]:
-        """List all jobs across simulations."""
-        data = self._get(
-            "/jobs",
-            params=_list_params(status=status, limit=limit, offset=offset),
-        )
-        return Page[Job].model_validate(data)
+    ) -> Page[Run]:
+        """List all runs across models."""
+        params = _list_params(status=status, limit=limit, offset=offset)
+        if project_id is not None:
+            params["projectId"] = project_id
+        data = self._get("/runs", params=params)
+        return Page[Run].model_validate(data)
 
     def list_autopaginate(
         self,
         *,
+        project_id: str | None = None,
         status: Status | None = None,
         page_size: int = 25,
-    ) -> Iterator[Job]:
-        """Iterate over all jobs."""
+    ) -> Iterator[Run]:
+        """Iterate over all runs."""
         return PageIterator(
             fetch=lambda offset: self.list(
-                status=status, limit=page_size, offset=offset
+                project_id=project_id, status=status, limit=page_size, offset=offset
             ),
             page_size=page_size,
         )
 
-    def get(self, id: str) -> Job:
-        """Get a job by ID."""
-        data = self._get(f"/jobs/{id}")
-        return Job.model_validate(data)
+    def get(self, id: str) -> Run:
+        """Get a run by ID."""
+        data = self._get(f"/runs/{id}")
+        return Run.model_validate(data)
 
-    def cancel(self, id: str) -> Job:
-        """Cancel a queued or running job."""
-        data = self._post(f"/jobs/{id}/cancel")
-        return Job.model_validate(data)
+    def cancel(self, id: str) -> Run:
+        """Cancel a queued or running run."""
+        data = self._post(f"/runs/{id}/cancel")
+        return Run.model_validate(data)
 
-    def results(self, job_id: str) -> JobResults:
-        """Access results scoped to a specific job."""
-        from .results import JobResults
+    def results(self, run_id: str) -> RunResults:
+        """Access results scoped to a specific run."""
+        from .results import RunResults
 
-        return JobResults(self._transport, job_id)
+        return RunResults(self._transport, run_id)
 
 
-class AsyncJobs(BaseAsyncResource):
-    """Top-level jobs resource (cross-simulation, async)."""
+class AsyncRuns(BaseAsyncResource):
+    """Top-level runs resource (cross-model, async)."""
 
     async def list(
         self,
         *,
+        project_id: str | None = None,
         status: Status | None = None,
         limit: int = 25,
         offset: int = 0,
-    ) -> Page[Job]:
-        """List all jobs across simulations."""
-        data = await self._get(
-            "/jobs",
-            params=_list_params(status=status, limit=limit, offset=offset),
-        )
-        return Page[Job].model_validate(data)
+    ) -> Page[Run]:
+        """List all runs across models."""
+        params = _list_params(status=status, limit=limit, offset=offset)
+        if project_id is not None:
+            params["projectId"] = project_id
+        data = await self._get("/runs", params=params)
+        return Page[Run].model_validate(data)
 
     def list_autopaginate(
         self,
         *,
+        project_id: str | None = None,
         status: Status | None = None,
         page_size: int = 25,
-    ) -> AsyncPageIterator[Job]:
-        """Iterate over all jobs."""
+    ) -> AsyncPageIterator[Run]:
+        """Iterate over all runs."""
         return AsyncPageIterator(
             fetch=lambda offset: self.list(
-                status=status, limit=page_size, offset=offset
+                project_id=project_id, status=status, limit=page_size, offset=offset
             ),
             page_size=page_size,
         )
 
-    async def get(self, id: str) -> Job:
-        """Get a job by ID."""
-        data = await self._get(f"/jobs/{id}")
-        return Job.model_validate(data)
+    async def get(self, id: str) -> Run:
+        """Get a run by ID."""
+        data = await self._get(f"/runs/{id}")
+        return Run.model_validate(data)
 
-    async def cancel(self, id: str) -> Job:
-        """Cancel a queued or running job."""
-        data = await self._post(f"/jobs/{id}/cancel")
-        return Job.model_validate(data)
+    async def cancel(self, id: str) -> Run:
+        """Cancel a queued or running run."""
+        data = await self._post(f"/runs/{id}/cancel")
+        return Run.model_validate(data)
 
-    def results(self, job_id: str) -> AsyncJobResults:
-        """Access results scoped to a specific job."""
-        from .results import AsyncJobResults
+    def results(self, run_id: str) -> AsyncRunResults:
+        """Access results scoped to a specific run."""
+        from .results import AsyncRunResults
 
-        return AsyncJobResults(self._transport, job_id)
+        return AsyncRunResults(self._transport, run_id)

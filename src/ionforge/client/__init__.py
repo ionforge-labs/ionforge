@@ -30,28 +30,33 @@ if TYPE_CHECKING:
     from ionforge.geometry.models import SerializedGeometry
 
 from ionforge._types._generated import (
+    Axes,
+    Axes1,
     BeamParams,
     Coils,
     Coils1,
     Coils2,
-    DownloadJobResultResponse,
+    DownloadRunResultResponse,
+    DownloadRunResultVizResponse,
     EnsembleParams,
     GeometryListItem,
     GeometryMeta,
     GetGeometryResponse,
+    GetSweepAggregateResponse,
     IntegratorParams,
-    Job,
+    ListSweepResultsResponse,
     MagneticFieldParams,
-    ParameterSpace,
+    Model,
+    ModelParams,
+    ModelWithCounts,
     PresignUploadResponse,
     Project,
     ProjectWithCounts,
     Result,
-    Simulation,
-    SimulationParams,
-    SimulationWithCounts,
+    Run,
     SolverParams,
     SpaceChargeParams,
+    Status,
     Sweep,
 )
 
@@ -68,21 +73,22 @@ from ._exceptions import (
     RateLimitError,
 )
 from ._models.pagination import Page
-from ._polling import async_poll_job, async_poll_sweep, poll_job, poll_sweep
+from ._polling import async_poll_run, async_poll_sweep, poll_run, poll_sweep
 from ._resources import (
     AsyncGeometries,
-    AsyncJobs,
+    AsyncModels,
     AsyncProjects,
-    AsyncSimulations,
+    AsyncRuns,
     AsyncSweeps,
     AsyncUploads,
     Geometries,
-    Jobs,
+    Models,
     Projects,
-    Simulations,
+    Runs,
     Sweeps,
     Uploads,
 )
+from ._resources.sweeps import SweepAxis
 from ._transport import AsyncTransport, SyncTransport
 
 
@@ -117,8 +123,8 @@ class IonForge:
 
         self.projects = Projects(self._transport)
         self.geometries = Geometries(self._transport)
-        self.simulations = Simulations(self._transport)
-        self.jobs = Jobs(self._transport)
+        self.models = Models(self._transport)
+        self.runs = Runs(self._transport)
         self.sweeps = Sweeps(self._transport)
         self.uploads = Uploads(self._transport)
 
@@ -149,38 +155,60 @@ class IonForge:
 
     def run_simulation(
         self,
-        simulation_id: str,
         *,
-        params: SimulationParams | dict[str, Any] | None = None,
-        name: str | None = None,
+        project_id: str,
+        name: str,
+        geometry_id: str | None = None,
+        params: ModelParams | dict[str, Any] | None = None,
+        simulator_type: str | None = None,
+        run_name: str | None = None,
+        kind: str | None = None,
         wait: bool = True,
         poll_interval: float = 2.0,
         poll_timeout: float = 600.0,
-    ) -> Job:
-        """Create a job and optionally wait for completion."""
-        job = self.simulations.jobs(simulation_id).create(name=name, params=params)
+    ) -> Run:
+        """Create a model, launch a run, and optionally wait for completion.
+
+        Creates a model in *project_id*, launches a run against it, and (when
+        *wait* is true) polls the run until it reaches a terminal state.
+        """
+        model = self.models.create(
+            project_id=project_id,
+            name=name,
+            geometry_id=geometry_id,
+            params=params,
+            simulator_type=simulator_type,
+        )
+        run = self.models.runs(model.id).create(name=run_name, params=params, kind=kind)
         if wait:
-            return poll_job(
-                self.jobs,
-                job.id,
+            return poll_run(
+                self.runs,
+                run.id,
                 interval=poll_interval,
                 timeout=poll_timeout,
             )
-        return job
+        return run
 
     def run_sweep(
         self,
-        simulation_id: str,
+        model_id: str,
         *,
-        name: str,
-        parameter_space: ParameterSpace,
+        axes: list[SweepAxis],
+        name: str | None = None,
+        strategy: str | None = None,
+        objective_metric: str | None = None,
+        objective_direction: str | None = None,
         wait: bool = True,
         poll_interval: float = 5.0,
         poll_timeout: float = 3600.0,
     ) -> Sweep:
-        """Create a parameter sweep and optionally wait for completion."""
-        sweep = self.simulations.sweeps(simulation_id).create(
-            name=name, parameter_space=parameter_space
+        """Create a parameter sweep for a model and optionally wait for completion."""
+        sweep = self.models.sweeps(model_id).create(
+            axes=axes,
+            name=name,
+            strategy=strategy,
+            objective_metric=objective_metric,
+            objective_direction=objective_direction,
         )
         if wait:
             return poll_sweep(
@@ -193,19 +221,19 @@ class IonForge:
 
     def download_results(
         self,
-        job_id: str,
+        run_id: str,
         *,
         output_dir: str | Path = ".",
     ) -> list[Path]:
-        """Download all result files for a completed job."""
+        """Download all result files for a completed run."""
         import httpx
 
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
         downloaded: list[Path] = []
-        for result in self.jobs.results(job_id).list_autopaginate():
-            dl = self.jobs.results(job_id).download(result.id)
+        for result in self.runs.results(run_id).list_autopaginate():
+            dl = self.runs.results(run_id).download(result.id)
             filename = f"result-{result.id}"
             dest = output_path / filename
             with httpx.stream("GET", dl.url) as response:
@@ -260,8 +288,8 @@ class AsyncIonForge:
 
         self.projects = AsyncProjects(self._transport)
         self.geometries = AsyncGeometries(self._transport)
-        self.simulations = AsyncSimulations(self._transport)
-        self.jobs = AsyncJobs(self._transport)
+        self.models = AsyncModels(self._transport)
+        self.runs = AsyncRuns(self._transport)
         self.sweeps = AsyncSweeps(self._transport)
         self.uploads = AsyncUploads(self._transport)
 
@@ -292,40 +320,62 @@ class AsyncIonForge:
 
     async def run_simulation(
         self,
-        simulation_id: str,
         *,
-        params: SimulationParams | dict[str, Any] | None = None,
-        name: str | None = None,
+        project_id: str,
+        name: str,
+        geometry_id: str | None = None,
+        params: ModelParams | dict[str, Any] | None = None,
+        simulator_type: str | None = None,
+        run_name: str | None = None,
+        kind: str | None = None,
         wait: bool = True,
         poll_interval: float = 2.0,
         poll_timeout: float = 600.0,
-    ) -> Job:
-        """Create a job and optionally wait for completion."""
-        job = await self.simulations.jobs(simulation_id).create(
-            name=name, params=params
+    ) -> Run:
+        """Create a model, launch a run, and optionally wait for completion.
+
+        Creates a model in *project_id*, launches a run against it, and (when
+        *wait* is true) polls the run until it reaches a terminal state.
+        """
+        model = await self.models.create(
+            project_id=project_id,
+            name=name,
+            geometry_id=geometry_id,
+            params=params,
+            simulator_type=simulator_type,
+        )
+        run = await self.models.runs(model.id).create(
+            name=run_name, params=params, kind=kind
         )
         if wait:
-            return await async_poll_job(
-                self.jobs,
-                job.id,
+            return await async_poll_run(
+                self.runs,
+                run.id,
                 interval=poll_interval,
                 timeout=poll_timeout,
             )
-        return job
+        return run
 
     async def run_sweep(
         self,
-        simulation_id: str,
+        model_id: str,
         *,
-        name: str,
-        parameter_space: ParameterSpace,
+        axes: list[SweepAxis],
+        name: str | None = None,
+        strategy: str | None = None,
+        objective_metric: str | None = None,
+        objective_direction: str | None = None,
         wait: bool = True,
         poll_interval: float = 5.0,
         poll_timeout: float = 3600.0,
     ) -> Sweep:
-        """Create a parameter sweep and optionally wait for completion."""
-        sweep = await self.simulations.sweeps(simulation_id).create(
-            name=name, parameter_space=parameter_space
+        """Create a parameter sweep for a model and optionally wait for completion."""
+        sweep = await self.models.sweeps(model_id).create(
+            axes=axes,
+            name=name,
+            strategy=strategy,
+            objective_metric=objective_metric,
+            objective_direction=objective_direction,
         )
         if wait:
             return await async_poll_sweep(
@@ -354,30 +404,36 @@ __all__ = [
     "IonForge",
     "AsyncIonForge",
     # Generated models
+    "Axes",
+    "Axes1",
     "BeamParams",
     "Coils",
     "Coils1",
     "Coils2",
-    "DownloadJobResultResponse",
+    "DownloadRunResultResponse",
+    "DownloadRunResultVizResponse",
     "EnsembleParams",
     "GeometryListItem",
     "GeometryMeta",
     "GetGeometryResponse",
+    "GetSweepAggregateResponse",
     "IntegratorParams",
-    "Job",
+    "ListSweepResultsResponse",
     "MagneticFieldParams",
+    "Model",
+    "ModelParams",
+    "ModelWithCounts",
     "Page",
-    "ParameterSpace",
     "PresignUploadResponse",
     "Project",
     "ProjectWithCounts",
     "Result",
-    "SimulationParams",
-    "Simulation",
-    "SimulationWithCounts",
+    "Run",
     "SolverParams",
     "SpaceChargeParams",
+    "Status",
     "Sweep",
+    "SweepAxis",
     # Exceptions
     "APIError",
     "AuthenticationError",
@@ -389,8 +445,8 @@ __all__ = [
     "PermissionDeniedError",
     "RateLimitError",
     # Polling
-    "poll_job",
-    "async_poll_job",
+    "poll_run",
+    "async_poll_run",
     "poll_sweep",
     "async_poll_sweep",
 ]

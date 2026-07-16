@@ -1,59 +1,59 @@
-"""Polling helpers for long-running jobs and sweeps."""
+"""Polling helpers for long-running runs and sweeps."""
 
 from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING
 
-from ionforge._types._generated import Job, Sweep
+from ionforge._types._generated import Run, Sweep
 
 if TYPE_CHECKING:
-    from ._resources.jobs import AsyncJobs, Jobs
+    from ._resources.runs import AsyncRuns, Runs
     from ._resources.sweeps import AsyncSweeps, Sweeps
 
-_TERMINAL_JOB_STATUSES = {"completed", "failed"}
+_TERMINAL_RUN_STATUSES = {"completed", "failed"}
 _TERMINAL_SWEEP_STATUSES = {"completed", "failed"}
 
 
-def poll_job(
-    jobs: Jobs,
-    job_id: str,
+def poll_run(
+    runs: Runs,
+    run_id: str,
     *,
     interval: float = 2.0,
     timeout: float = 600.0,
-) -> Job:
-    """Poll a job until it reaches a terminal state.
+) -> Run:
+    """Poll a run until it reaches a terminal state.
 
-    Raises ``TimeoutError`` if the job does not finish within *timeout* seconds.
+    Raises ``TimeoutError`` if the run does not finish within *timeout* seconds.
     """
     elapsed = 0.0
     while True:
-        job = jobs.get(job_id)
-        if job.status in _TERMINAL_JOB_STATUSES:
-            return job
+        run = runs.get(run_id)
+        if run.status in _TERMINAL_RUN_STATUSES:
+            return run
         if elapsed >= timeout:
-            raise TimeoutError(f"Job {job_id} still {job.status} after {timeout}s")
+            raise TimeoutError(f"Run {run_id} still {run.status} after {timeout}s")
         time.sleep(interval)
         elapsed += interval
 
 
-async def async_poll_job(
-    jobs: AsyncJobs,
-    job_id: str,
+async def async_poll_run(
+    runs: AsyncRuns,
+    run_id: str,
     *,
     interval: float = 2.0,
     timeout: float = 600.0,
-) -> Job:
-    """Async version of :func:`poll_job`."""
+) -> Run:
+    """Async version of :func:`poll_run`."""
     import asyncio
 
     elapsed = 0.0
     while True:
-        job = await jobs.get(job_id)
-        if job.status in _TERMINAL_JOB_STATUSES:
-            return job
+        run = await runs.get(run_id)
+        if run.status in _TERMINAL_RUN_STATUSES:
+            return run
         if elapsed >= timeout:
-            raise TimeoutError(f"Job {job_id} still {job.status} after {timeout}s")
+            raise TimeoutError(f"Run {run_id} still {run.status} after {timeout}s")
         await asyncio.sleep(interval)
         elapsed += interval
 

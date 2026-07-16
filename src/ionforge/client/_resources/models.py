@@ -1,4 +1,4 @@
-"""Simulations resource."""
+"""Models resource."""
 
 from __future__ import annotations
 
@@ -6,19 +6,19 @@ from collections.abc import Iterator
 from typing import Any
 
 from ionforge._types._generated import (
-    CloneSimulationRequest,
-    CreateSimulationRequest,
-    Simulation,
-    SimulationParams,
-    SimulationWithCounts,
-    UpdateSimulationRequest,
+    CloneModelRequest,
+    CreateModelRequest,
+    Model,
+    ModelParams,
+    ModelWithCounts,
+    UpdateModelRequest,
 )
 
 from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from ._base import BaseAsyncResource, BaseSyncResource
-from .jobs import AsyncSimulationJobs, SimulationJobs
-from .sweeps import AsyncSimulationSweeps, SimulationSweeps
+from .runs import AsyncModelRuns, ModelRuns
+from .sweeps import AsyncModelSweeps, ModelSweeps
 
 
 def _list_params(
@@ -39,8 +39,8 @@ def _list_params(
     return params
 
 
-class Simulations(BaseSyncResource):
-    """Synchronous simulations resource."""
+class Models(BaseSyncResource):
+    """Synchronous models resource."""
 
     def create(
         self,
@@ -50,13 +50,13 @@ class Simulations(BaseSyncResource):
         description: str | None = None,
         simulator_type: str | None = None,
         geometry_id: str | None = None,
-        params: SimulationParams | dict[str, Any] | None = None,
+        params: ModelParams | dict[str, Any] | None = None,
         is_template: bool | None = None,
-    ) -> Simulation:
-        """Create a simulation."""
+    ) -> Model:
+        """Create a model."""
         data = self._post(
-            "/simulations",
-            body=CreateSimulationRequest(
+            "/models",
+            body=CreateModelRequest(
                 project_id=project_id,
                 name=name,
                 description=description,
@@ -66,7 +66,7 @@ class Simulations(BaseSyncResource):
                 is_template=is_template,
             ),
         )
-        return Simulation.model_validate(data)
+        return Model.model_validate(data)
 
     def list(
         self,
@@ -76,10 +76,10 @@ class Simulations(BaseSyncResource):
         offset: int = 0,
         search: str | None = None,
         simulator_type: str | None = None,
-    ) -> Page[Simulation]:
-        """List simulations (paginated)."""
+    ) -> Page[Model]:
+        """List models (paginated)."""
         data = self._get(
-            "/simulations",
+            "/models",
             params=_list_params(
                 project_id=project_id,
                 limit=limit,
@@ -88,7 +88,7 @@ class Simulations(BaseSyncResource):
                 simulator_type=simulator_type,
             ),
         )
-        return Page[Simulation].model_validate(data)
+        return Page[Model].model_validate(data)
 
     def list_autopaginate(
         self,
@@ -97,8 +97,8 @@ class Simulations(BaseSyncResource):
         search: str | None = None,
         simulator_type: str | None = None,
         page_size: int = 25,
-    ) -> Iterator[Simulation]:
-        """Iterate over all simulations, fetching pages automatically."""
+    ) -> Iterator[Model]:
+        """Iterate over all models, fetching pages automatically."""
         return PageIterator(
             fetch=lambda offset: self.list(
                 project_id=project_id,
@@ -110,10 +110,10 @@ class Simulations(BaseSyncResource):
             page_size=page_size,
         )
 
-    def get(self, id: str) -> SimulationWithCounts:
-        """Get a simulation by ID."""
-        data = self._get(f"/simulations/{id}")
-        return SimulationWithCounts.model_validate(data)
+    def get(self, id: str) -> ModelWithCounts:
+        """Get a model by ID."""
+        data = self._get(f"/models/{id}")
+        return ModelWithCounts.model_validate(data)
 
     def update(
         self,
@@ -122,37 +122,37 @@ class Simulations(BaseSyncResource):
         name: str | None = None,
         description: str | None = None,
         geometry_id: str | None = None,
-        params: SimulationParams | dict[str, Any] | None = None,
-    ) -> Simulation:
-        """Update a simulation."""
+        params: ModelParams | dict[str, Any] | None = None,
+    ) -> Model:
+        """Update a model."""
         data = self._put(
-            f"/simulations/{id}",
-            body=UpdateSimulationRequest(
+            f"/models/{id}",
+            body=UpdateModelRequest(
                 name=name,
                 description=description,
                 geometry_id=geometry_id,
                 params=params,
             ),
         )
-        return Simulation.model_validate(data)
+        return Model.model_validate(data)
 
     def delete(self, id: str) -> None:
-        """Delete a simulation."""
-        self._delete(f"/simulations/{id}")
+        """Delete a model."""
+        self._delete(f"/models/{id}")
 
     def list_templates(
         self,
         *,
         search: str | None = None,
         limit: int = 25,
-    ) -> list[Simulation]:
-        """List template simulations."""
+    ) -> list[Model]:
+        """List template models."""
         params: dict[str, object] = {"limit": limit}
         if search is not None:
             params["search"] = search
-        data = self._get("/simulations/templates", params=params)
+        data = self._get("/models/templates", params=params)
         items = data.get("items", data) if isinstance(data, dict) else data
-        return [Simulation.model_validate(item) for item in items]
+        return [Model.model_validate(item) for item in items]
 
     def clone(
         self,
@@ -161,30 +161,30 @@ class Simulations(BaseSyncResource):
         project_id: str,
         name: str,
         description: str | None = None,
-    ) -> Simulation:
-        """Clone a template simulation into a project."""
+    ) -> Model:
+        """Clone a template model into a project."""
         data = self._post(
-            "/simulations/clone",
-            body=CloneSimulationRequest(
+            "/models/clone",
+            body=CloneModelRequest(
                 template_id=template_id,
                 project_id=project_id,
                 name=name,
                 description=description,
             ),
         )
-        return Simulation.model_validate(data)
+        return Model.model_validate(data)
 
-    def jobs(self, simulation_id: str) -> SimulationJobs:
-        """Access jobs scoped to a specific simulation."""
-        return SimulationJobs(self._transport, simulation_id)
+    def runs(self, model_id: str) -> ModelRuns:
+        """Access runs scoped to a specific model."""
+        return ModelRuns(self._transport, model_id)
 
-    def sweeps(self, simulation_id: str) -> SimulationSweeps:
-        """Access sweeps scoped to a specific simulation."""
-        return SimulationSweeps(self._transport, simulation_id)
+    def sweeps(self, model_id: str) -> ModelSweeps:
+        """Access sweeps scoped to a specific model."""
+        return ModelSweeps(self._transport, model_id)
 
 
-class AsyncSimulations(BaseAsyncResource):
-    """Asynchronous simulations resource."""
+class AsyncModels(BaseAsyncResource):
+    """Asynchronous models resource."""
 
     async def create(
         self,
@@ -194,13 +194,13 @@ class AsyncSimulations(BaseAsyncResource):
         description: str | None = None,
         simulator_type: str | None = None,
         geometry_id: str | None = None,
-        params: SimulationParams | dict[str, Any] | None = None,
+        params: ModelParams | dict[str, Any] | None = None,
         is_template: bool | None = None,
-    ) -> Simulation:
-        """Create a simulation."""
+    ) -> Model:
+        """Create a model."""
         data = await self._post(
-            "/simulations",
-            body=CreateSimulationRequest(
+            "/models",
+            body=CreateModelRequest(
                 project_id=project_id,
                 name=name,
                 description=description,
@@ -210,7 +210,7 @@ class AsyncSimulations(BaseAsyncResource):
                 is_template=is_template,
             ),
         )
-        return Simulation.model_validate(data)
+        return Model.model_validate(data)
 
     async def list(
         self,
@@ -220,10 +220,10 @@ class AsyncSimulations(BaseAsyncResource):
         offset: int = 0,
         search: str | None = None,
         simulator_type: str | None = None,
-    ) -> Page[Simulation]:
-        """List simulations (paginated)."""
+    ) -> Page[Model]:
+        """List models (paginated)."""
         data = await self._get(
-            "/simulations",
+            "/models",
             params=_list_params(
                 project_id=project_id,
                 limit=limit,
@@ -232,7 +232,7 @@ class AsyncSimulations(BaseAsyncResource):
                 simulator_type=simulator_type,
             ),
         )
-        return Page[Simulation].model_validate(data)
+        return Page[Model].model_validate(data)
 
     def list_autopaginate(
         self,
@@ -241,8 +241,8 @@ class AsyncSimulations(BaseAsyncResource):
         search: str | None = None,
         simulator_type: str | None = None,
         page_size: int = 25,
-    ) -> AsyncPageIterator[Simulation]:
-        """Iterate over all simulations, fetching pages automatically."""
+    ) -> AsyncPageIterator[Model]:
+        """Iterate over all models, fetching pages automatically."""
         return AsyncPageIterator(
             fetch=lambda offset: self.list(
                 project_id=project_id,
@@ -254,10 +254,10 @@ class AsyncSimulations(BaseAsyncResource):
             page_size=page_size,
         )
 
-    async def get(self, id: str) -> SimulationWithCounts:
-        """Get a simulation by ID."""
-        data = await self._get(f"/simulations/{id}")
-        return SimulationWithCounts.model_validate(data)
+    async def get(self, id: str) -> ModelWithCounts:
+        """Get a model by ID."""
+        data = await self._get(f"/models/{id}")
+        return ModelWithCounts.model_validate(data)
 
     async def update(
         self,
@@ -266,37 +266,37 @@ class AsyncSimulations(BaseAsyncResource):
         name: str | None = None,
         description: str | None = None,
         geometry_id: str | None = None,
-        params: SimulationParams | dict[str, Any] | None = None,
-    ) -> Simulation:
-        """Update a simulation."""
+        params: ModelParams | dict[str, Any] | None = None,
+    ) -> Model:
+        """Update a model."""
         data = await self._put(
-            f"/simulations/{id}",
-            body=UpdateSimulationRequest(
+            f"/models/{id}",
+            body=UpdateModelRequest(
                 name=name,
                 description=description,
                 geometry_id=geometry_id,
                 params=params,
             ),
         )
-        return Simulation.model_validate(data)
+        return Model.model_validate(data)
 
     async def delete(self, id: str) -> None:
-        """Delete a simulation."""
-        await self._delete(f"/simulations/{id}")
+        """Delete a model."""
+        await self._delete(f"/models/{id}")
 
     async def list_templates(
         self,
         *,
         search: str | None = None,
         limit: int = 25,
-    ) -> list[Simulation]:
-        """List template simulations."""
+    ) -> list[Model]:
+        """List template models."""
         params: dict[str, object] = {"limit": limit}
         if search is not None:
             params["search"] = search
-        data = await self._get("/simulations/templates", params=params)
+        data = await self._get("/models/templates", params=params)
         items = data.get("items", data) if isinstance(data, dict) else data
-        return [Simulation.model_validate(item) for item in items]
+        return [Model.model_validate(item) for item in items]
 
     async def clone(
         self,
@@ -305,23 +305,23 @@ class AsyncSimulations(BaseAsyncResource):
         project_id: str,
         name: str,
         description: str | None = None,
-    ) -> Simulation:
-        """Clone a template simulation into a project."""
+    ) -> Model:
+        """Clone a template model into a project."""
         data = await self._post(
-            "/simulations/clone",
-            body=CloneSimulationRequest(
+            "/models/clone",
+            body=CloneModelRequest(
                 template_id=template_id,
                 project_id=project_id,
                 name=name,
                 description=description,
             ),
         )
-        return Simulation.model_validate(data)
+        return Model.model_validate(data)
 
-    def jobs(self, simulation_id: str) -> AsyncSimulationJobs:
-        """Access jobs scoped to a specific simulation."""
-        return AsyncSimulationJobs(self._transport, simulation_id)
+    def runs(self, model_id: str) -> AsyncModelRuns:
+        """Access runs scoped to a specific model."""
+        return AsyncModelRuns(self._transport, model_id)
 
-    def sweeps(self, simulation_id: str) -> AsyncSimulationSweeps:
-        """Access sweeps scoped to a specific simulation."""
-        return AsyncSimulationSweeps(self._transport, simulation_id)
+    def sweeps(self, model_id: str) -> AsyncModelSweeps:
+        """Access sweeps scoped to a specific model."""
+        return AsyncModelSweeps(self._transport, model_id)

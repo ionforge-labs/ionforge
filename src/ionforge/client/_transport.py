@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import httpx
@@ -14,7 +15,13 @@ from ._exceptions import (
     _exception_for_status,
 )
 
-_VERSION = "0.1.0"
+# Version reported in the User-Agent, resolved from the installed package
+# metadata with a fallback for editable or unpackaged checkouts.
+_FALLBACK_VERSION = "0.0.0"
+try:
+    _VERSION = version("ionforge")
+except PackageNotFoundError:  # pragma: no cover - unpackaged checkout
+    _VERSION = _FALLBACK_VERSION
 _USER_AGENT = f"ionforge-python/{_VERSION}"
 
 # Status codes that trigger automatic retry.

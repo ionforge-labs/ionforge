@@ -1,30 +1,30 @@
 """Resource namespace classes."""
 
 from .geometries import AsyncGeometries, Geometries
-from .jobs import AsyncJobs, AsyncSimulationJobs, Jobs, SimulationJobs
+from .models import AsyncModels, Models
 from .projects import AsyncProjects, Projects
-from .results import AsyncJobResults, JobResults
-from .simulations import AsyncSimulations, Simulations
-from .sweeps import AsyncSimulationSweeps, AsyncSweeps, SimulationSweeps, Sweeps
+from .results import AsyncRunResults, RunResults
+from .runs import AsyncModelRuns, AsyncRuns, ModelRuns, Runs
+from .sweeps import AsyncModelSweeps, AsyncSweeps, ModelSweeps, Sweeps
 from .uploads import AsyncUploads, Uploads
 
 __all__ = [
     "AsyncGeometries",
-    "AsyncJobResults",
-    "AsyncJobs",
+    "AsyncModelRuns",
+    "AsyncModelSweeps",
+    "AsyncModels",
     "AsyncProjects",
-    "AsyncSimulationJobs",
-    "AsyncSimulationSweeps",
-    "AsyncSimulations",
+    "AsyncRunResults",
+    "AsyncRuns",
     "AsyncSweeps",
     "AsyncUploads",
     "Geometries",
-    "JobResults",
-    "Jobs",
+    "ModelRuns",
+    "ModelSweeps",
+    "Models",
     "Projects",
-    "SimulationJobs",
-    "SimulationSweeps",
-    "Simulations",
+    "RunResults",
+    "Runs",
     "Sweeps",
     "Uploads",
 ]
