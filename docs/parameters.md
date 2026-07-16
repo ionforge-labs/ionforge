@@ -84,7 +84,7 @@ Selects the field solver and its discretisation.
 |---|---|---|
 | `fd` | Finite difference, axisymmetric grid | Rotationally symmetric geometries on an (r, z) grid |
 | `fd_3d` | Finite difference, 3-D grid | Fully 3-D geometries with no exploitable symmetry |
-| `bem_2d` | Boundary element, planar | 2-D / planar-symmetric problems |
+| `bem_2d` | Boundary element, 2-D | 2-D boundary-element formulation for rotationally symmetric problems; prefer the explicit `bem_axisym` for new work |
 | `bem_3d` | Boundary element, 3-D | 3-D geometries where a surface method is preferable to a volume grid |
 | `bem_axisym` | Boundary element, axisymmetric | Rotationally symmetric lenses (the einzel-lens example uses this) |
 | `hybrid` | Combined approach | Setups the platform routes through more than one method |
