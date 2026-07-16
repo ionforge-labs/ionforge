@@ -1,7 +1,7 @@
 """Load an STL file, inspect mesh quality, and re-export it.
 
 Creates a small ASCII STL in a temp file so the example is self-contained.
-Requires the [stl] extra: uv add "ionforge[stl]"
+STL support works out of the box - no extra dependencies required.
 """
 
 import tempfile

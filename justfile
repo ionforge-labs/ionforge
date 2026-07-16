@@ -47,28 +47,30 @@ install-hooks:
 example name:
     uv run python examples/{{ name }}.py
 
-# --- Schema (TypeScript) ---
+# --- Client codegen ---
 
-# Install schema package dependencies
-schema-setup:
-    cd packages/schema && pnpm install
+# Generate Pydantic models from an OpenAPI spec (filters to core SDK resources first)
+codegen spec:
+    uv run python scripts/filter_openapi.py {{ spec }} openapi-filtered.json
+    uv run datamodel-codegen \
+        --input openapi-filtered.json \
+        --input-file-type openapi \
+        --output src/ionforge/_types/_generated.py \
+        --output-model-type pydantic_v2.BaseModel \
+        --base-class ionforge._types._base_model.ApiModel \
+        --snake-case-field \
+        --use-union-operator \
+        --use-standard-collections \
+        --target-python-version 3.11 \
+        --openapi-scopes schemas paths \
+        --use-operation-id-as-name \
+        --use-annotated \
+        --field-constraints \
+        --set-default-enum-member \
+        --formatters ruff-format ruff-check
+    uv run ruff format src/ionforge/_types/_generated.py
+    rm -f openapi-filtered.json
+    @echo "Generated src/ionforge/_types/_generated.py"
 
-# Generate Zod schemas from Pydantic models
-schema-generate:
-    uv run python -m ionforge.geometry.export_schema > packages/schema/geometry-schema.json
-    cd packages/schema && pnpm run generate
-
-# Build the schema package
-schema-build: schema-generate
-    cd packages/schema && pnpm run build
-
-# Type-check the schema package
-schema-typecheck:
-    cd packages/schema && pnpm run typecheck
-
-# Lint and format the schema package
-schema-check: schema-generate schema-typecheck
-    cd packages/schema && pnpm run check
-
-# Run all checks (Python + schema)
-check-all: check schema-check schema-build
+# Run all checks
+check-all: check

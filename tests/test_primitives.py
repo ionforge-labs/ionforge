@@ -6,6 +6,7 @@ from ionforge.geometry import (
     Cylinder,
     Geometry,
     Sphere,
+    Symmetry,
 )
 
 
@@ -171,3 +172,29 @@ class TestGeometryBuilder:
         for g in sg.groups:
             all_face_ids.extend(g.face_ids)
         assert len(all_face_ids) == len(set(all_face_ids))
+
+    def test_symmetry_defaults_to_none(self):
+        geo = Geometry(bounding_box=(0.1, 0.1, 0.1))
+        geo.add(Cylinder(r=0.01, length=0.05, voltage=100, n_segments=8))
+        sg = geo.to_serialized_geometry()
+        assert sg.symmetry == Symmetry.none
+        # Survives a JSON round-trip as the wire enum value.
+        assert sg.model_dump(mode="json", by_alias=True)["symmetry"] == "none"
+
+    def test_symmetry_axisymmetric_string_round_trips(self):
+        geo = Geometry(bounding_box=(0.1, 0.1, 0.2), symmetry="axisymmetric")
+        geo.add(Cylinder(r=0.01, length=0.05, voltage=100, n_segments=8))
+        sg = geo.to_serialized_geometry()
+        assert sg.symmetry == Symmetry.axisymmetric
+
+        dumped = sg.model_dump(mode="json", by_alias=True)
+        assert dumped["symmetry"] == "axisymmetric"
+
+        reloaded = type(sg).model_validate(dumped)
+        assert reloaded.symmetry == Symmetry.axisymmetric
+
+    def test_symmetry_accepts_enum_member(self):
+        geo = Geometry(bounding_box=(0.1, 0.1, 0.2), symmetry=Symmetry.axisymmetric)
+        geo.add(Cylinder(r=0.01, length=0.05, voltage=100, n_segments=8))
+        sg = geo.to_serialized_geometry()
+        assert sg.symmetry == Symmetry.axisymmetric

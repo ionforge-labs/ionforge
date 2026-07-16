@@ -2,7 +2,7 @@
 
 Open-source charged particle optics toolkit.
 
-The SDK provides parametric geometry primitives for building simulation meshes, Pydantic v2 serialization models, STL mesh import/export with quality metrics, and JSON Schema generation for TypeScript codegen.
+The SDK provides parametric geometry primitives for building simulation meshes, Pydantic v2 serialization models, STL mesh import/export with quality metrics, and a client for the IonForge cloud API.
 
 ## Installation
 
@@ -36,6 +36,8 @@ uv run python examples/<name>.py
 ### Parametric primitives
 
 Build geometry using `Cylinder`, `AnnularDisk`, `Cone`, and `Sphere` primitives. Each primitive takes a `voltage`, `name`, and `n_segments` (default 32) for mesh resolution.
+
+Primitives extrude along the z axis (the optical axis) and are centred on it in x/y; lengths and positions are in metres. The axes, origin, and bounding-box conventions are documented in [`docs/parameters.md`](docs/parameters.md#axes-origin-and-the-bounding-box).
 
 ```python
 from ionforge.geometry import Geometry, Cylinder, AnnularDisk, Cone, Sphere
@@ -79,9 +81,9 @@ triangles = load_stl("model.stl", scale_factor=1e-3)
 stats = mesh_stats(triangles, verbose=True)
 # Mesh statistics:
 #   Triangles: 2  (0 degenerate, 2 valid)
-#   Total area: 500.00 mm²
-#   Edge range: 0.707 – 1.000 mm
-#   Aspect ratio: mean=1.41  max=1.41
+#   Total area: 1.00 mm²
+#   Edge range: 1.000 – 1.414 mm
+#   Aspect ratio: mean=2.00  max=2.00
 
 # Export as binary STL
 write_stl("output.stl", triangles, name="my_mesh")
@@ -170,19 +172,21 @@ See [`examples/json_round_trip.py`](examples/json_round_trip.py) for the full ru
 
 ### JSON Schema generation
 
-Generate a JSON Schema from the Pydantic models, useful for TypeScript codegen with tools like `json-schema-to-zod`:
+Every serialization model is a Pydantic model, so you can emit a standard JSON Schema straight from it - handy for validation or for generating types in other languages:
 
-```bash
-python -m ionforge.geometry.export_schema > geometry-schema.json
+```python
+import json
+from ionforge.geometry import SerializedGeometry
+
+schema = SerializedGeometry.model_json_schema()
+print(json.dumps(schema, indent=2))
 ```
 
-Then generate TypeScript types:
+See [`examples/export_schema.py`](examples/export_schema.py) for a runnable version that writes the schema to stdout:
 
 ```bash
-npx json-schema-to-zod -i geometry-schema.json -o geometry.generated.ts
+uv run python examples/export_schema.py > geometry-schema.json
 ```
-
-See [`examples/export_schema.py`](examples/export_schema.py) for the programmatic version.
 
 ### Low-level model API
 
@@ -217,6 +221,97 @@ geo = SerializedGeometry(
 errors = geo.validate_consistency()  # [] if valid
 ```
 
+## API client
+
+The SDK ships an optional client for the IonForge cloud API. Install it with the `client` extra:
+
+```bash
+uv add "ionforge[client]"
+```
+
+Authenticate with an API key. The client reads `IONFORGE_API_KEY` from the environment (or pass `api_key=` explicitly), and an optional `IONFORGE_BASE_URL` overrides the API endpoint:
+
+```bash
+export IONFORGE_API_KEY="ifk_..."
+```
+
+The workflow is geometry -> model -> run. Build a geometry locally, upload it, launch a simulation run, and pull down the results:
+
+```python
+from ionforge.client import IonForge
+from ionforge.geometry import Geometry, Cylinder
+
+with IonForge() as client:  # reads IONFORGE_API_KEY
+    project = client.projects.create(name="Einzel lens study")
+
+    geo = Geometry(bounding_box=(0.1, 0.1, 0.2))
+    geo.add(Cylinder(r=0.01, length=0.05, voltage=100, name="tube"))
+    geometry = client.upload_geometry(project.id, "lens-v1", geo)
+
+    # Creates a model, launches a run, and waits for it to finish
+    run = client.run_simulation(
+        project_id=project.id,
+        name="baseline",
+        geometry_id=geometry.id,
+    )
+
+    paths = client.download_results(run.id, output_dir="results/")
+```
+
+An `AsyncIonForge` client with the same surface is available for asyncio code.
+
+### Analysing results with pandas
+
+Install the `pandas` extra (`uv add "ionforge[pandas]"`) to pull sweep and run results straight into a DataFrame for analysis and plotting. Sweep results give one row per point, with each swept parameter flattened to its own `param.`-prefixed dot-path column (`param.beam.E_nominal`) alongside the objective and per-point status:
+
+```python
+with IonForge() as client:
+    # One row per sweep point; auto-paginates across result cursors.
+    results = client.sweeps.list_results(sweep.id, mode="full")
+    df = results.to_dataframe()
+
+    # e.g. transmission vs beam energy
+    df.plot.scatter(x="param.beam.E_nominal", y="summary.transmission")
+
+    # A tabular view of every run in a project
+    runs_df = client.runs.to_dataframe(project_id=project.id)
+```
+
+In `full` mode, per-point result-summary metrics appear as `summary.*` columns; `table` mode returns just the objective and status. Pass `max_rows=` to cap large pulls.
+
+Downloaded result files parse into numpy arrays and DataFrames with `load_result`. Each result file carries the scalar run metrics (transmission, energy resolution, point spread), the per-particle exit and input arrays, and -- when the run stored them -- per-particle trajectories:
+
+```python
+from ionforge.client import IonForge, load_result
+
+with IonForge() as client:
+    paths = client.download_results(run.id, output_dir="results/")
+    data = load_result(paths[0])
+
+    if data.summary.transmission is not None:
+        print(f"transmission: {data.summary.transmission:.1%}")
+    eres = data.summary.energy_resolution
+    if eres is not None and eres.fwhm_eV is not None:
+        print(f"energy resolution FWHM: {eres.fwhm_eV:.3f} eV")
+
+    # Per-particle numbers as numpy arrays.
+    exit_energy_spread = data.exit_energies.std()
+
+    # Stable per-particle frames: one row per launched particle, and one row
+    # per transmitted particle. Their shapes don't flip when particles are lost.
+    particles = data.particles_dataframe()  # column: input_energy
+    exits = data.exits_dataframe()  # columns: exit_energy, exit_position
+
+    # The energy-transmission curve, when present.
+    curve = data.transmission_curve_dataframe()
+```
+
+`client.load_results(run.id, output_dir="results/")` downloads and parses in one call, returning a `RunResultData` per file.
+
+Simulation runs are configured with `ModelParams` (beam, solver, integrator, and more). Every field, with its units, defaults, and conventions, is documented in [`docs/parameters.md`](docs/parameters.md).
+
+See [`examples/run_simulation.py`](examples/run_simulation.py) for a complete, runnable end-to-end workflow that builds an einzel lens, uploads it, runs a simulation, and downloads the results.
+
 ## Development
 
 ```bash
@@ -225,3 +320,7 @@ uv run pytest
 uv run ruff check .
 uv run ty check
 ```
+
+If you use an AI coding assistant (Claude Code, Cursor, etc.), see [`AGENTS.md`](AGENTS.md) for a concise, machine-readable orientation to the SDK's layout and conventions.
+
+See [`RELEASING.md`](RELEASING.md) for how versions are cut and published to PyPI.
