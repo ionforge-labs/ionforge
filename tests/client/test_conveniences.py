@@ -124,40 +124,31 @@ def test_upload_geometry_accepts_serialized(einzel_serialized) -> None:
 
 
 # --- download_results (presigned URL on a different host) ------------------
+#
+# The presigned URL lives on ``files.example.com`` (path ``/results/res_1``),
+# a different host from the API. Both the API client and the transport's
+# dedicated download client share the single injected ``MockTransport``, so the
+# same router serves the API endpoints and the presigned file, letting each test
+# assert the presigned request carried no ``Authorization`` header.
 
 
-def _download_router() -> Router:
+def _download_router(recorder: list[httpx.Request] | None = None) -> Router:
+    def presigned(req: httpx.Request) -> httpx.Response:
+        if recorder is not None:
+            recorder.append(req)
+        return httpx.Response(200, content=FILE_BYTES)
+
     return (
         Router()
         .json("GET", r"/v1/runs/run_1/results", page([make_result(id="res_1")]))
         .json("GET", r"/v1/runs/run_1/results/res_1/download", {"url": PRESIGNED_URL})
+        .add("GET", r"/results/res_1", presigned)
     )
 
 
-def _presigned_handler(recorder: list[httpx.Request]):
-    def handler(req: httpx.Request) -> httpx.Response:
-        recorder.append(req)
-        return httpx.Response(200, content=FILE_BYTES)
-
-    return handler
-
-
-def test_download_results_sync_writes_bytes_without_auth_leak(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from contextlib import contextmanager
-
+def test_download_results_sync_writes_bytes_without_auth_leak(tmp_path: Path) -> None:
     presigned_reqs: list[httpx.Request] = []
-    mock = httpx.MockTransport(_presigned_handler(presigned_reqs))
-
-    @contextmanager
-    def fake_stream(method: str, url: str, **kwargs: object):
-        with httpx.Client(transport=mock) as c, c.stream(method, url, **kwargs) as r:
-            yield r
-
-    monkeypatch.setattr(httpx, "stream", fake_stream)
-
-    client = make_client(_download_router())
+    client = make_client(_download_router(presigned_reqs))
     paths = client.download_results("run_1", output_dir=tmp_path)
 
     assert len(paths) == 1
@@ -168,22 +159,11 @@ def test_download_results_sync_writes_bytes_without_auth_leak(
     assert "authorization" not in {k.lower() for k in presigned_reqs[0].headers}
 
 
-def test_download_results_async_writes_bytes_without_auth_leak(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_download_results_async_writes_bytes_without_auth_leak(tmp_path: Path) -> None:
     presigned_reqs: list[httpx.Request] = []
-    mock = httpx.MockTransport(_presigned_handler(presigned_reqs))
 
     async def go() -> list[Path]:
-        # Build the client first so its own transport is the API mock, then
-        # patch AsyncClient so only the download uses the presigned mock.
-        client = make_async_client(_download_router())
-        real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx,
-            "AsyncClient",
-            lambda **kw: real_async_client(transport=mock, **kw),
-        )
+        client = make_async_client(_download_router(presigned_reqs))
         paths = await client.download_results("run_1", output_dir=tmp_path)
         await client.close()
         return paths
@@ -195,3 +175,41 @@ def test_download_results_async_writes_bytes_without_auth_leak(
     assert len(presigned_reqs) == 1
     assert presigned_reqs[0].url.host == "files.example.com"
     assert "authorization" not in {k.lower() for k in presigned_reqs[0].headers}
+
+
+def test_download_results_async_concurrent_writes_correct_files(tmp_path: Path) -> None:
+    results = [make_result(id=f"res_{i}") for i in range(5)]
+
+    def download(req: httpx.Request) -> httpx.Response:
+        # /v1/runs/run_1/results/res_2/download -> res_2
+        rid = req.url.path.split("/")[-2]
+        return httpx.Response(
+            200, json={"url": f"https://files.example.com/results/{rid}"}
+        )
+
+    def presigned(req: httpx.Request) -> httpx.Response:
+        rid = req.url.path.rsplit("/", 1)[-1]
+        return httpx.Response(200, content=f"body-{rid}".encode())
+
+    router = (
+        Router()
+        .json("GET", r"/v1/runs/run_1/results", page(results))
+        .add("GET", r"/v1/runs/run_1/results/res_\d+/download", download)
+        .add("GET", r"/results/res_\d+", presigned)
+    )
+
+    async def go() -> list[Path]:
+        client = make_async_client(router)
+        paths = await client.download_results(
+            "run_1", output_dir=tmp_path, concurrency=3
+        )
+        await client.close()
+        return paths
+
+    paths = asyncio.run(go())
+
+    # One file per result, returned in result order, each with its own bytes.
+    assert len(paths) == 5
+    for i, path in enumerate(paths):
+        assert path.name == f"result-res_{i}"
+        assert path.read_bytes() == f"body-res_{i}".encode()

@@ -22,6 +22,7 @@ except ImportError as _exc:
         "Install it with: pip install ionforge[client]"
     ) from _exc
 
+import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -106,6 +107,22 @@ from .results_io import (
 )
 
 
+def _as_serialized_geometry(
+    geometry: SerializedGeometry | Geometry,
+) -> SerializedGeometry:
+    """Coerce a geometry builder or serialised model into a ``SerializedGeometry``.
+
+    Accepts either a :class:`~ionforge.geometry.builder.Geometry` builder (which
+    is serialised) or an already-serialised model (passed through), so both
+    ``upload_geometry`` variants share one coercion.
+    """
+    from ionforge.geometry.builder import Geometry as _Geometry
+
+    if isinstance(geometry, _Geometry):
+        return geometry.to_serialized_geometry()
+    return geometry
+
+
 class IonForge:
     """Synchronous IonForge API client.
 
@@ -154,18 +171,11 @@ class IonForge:
         description: str | None = None,
     ) -> GeometryMeta:
         """Upload a geometry from a builder or serialised model."""
-        from ionforge.geometry.builder import Geometry as _Geometry
-
-        sg = (
-            geometry.to_serialized_geometry()
-            if isinstance(geometry, _Geometry)
-            else geometry
-        )
         return self.geometries.create(
             project_id=project_id,
             name=name,
             description=description,
-            geometry_data=sg,
+            geometry_data=_as_serialized_geometry(geometry),
         )
 
     def run_simulation(
@@ -249,22 +259,19 @@ class IonForge:
         downloaded file into numpy arrays and pandas frames with
         :func:`ionforge.client.load_result`, or use :meth:`load_results` to
         download and parse in one call.
-        """
-        import httpx
 
+        Each file streams through the transport's dedicated download client, so
+        presigned URLs get the configured timeout, redirect following, retries,
+        and the typed exception hierarchy, and never receive the API credential.
+        """
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
         downloaded: list[Path] = []
         for result in self.runs.results(run_id).list_autopaginate():
             dl = self.runs.results(run_id).download(result.id)
-            filename = f"result-{result.id}"
-            dest = output_path / filename
-            with httpx.stream("GET", dl.url) as response:
-                response.raise_for_status()
-                with open(dest, "wb") as f:
-                    for chunk in response.iter_bytes():
-                        f.write(chunk)
+            dest = output_path / f"result-{result.id}"
+            self._transport.stream_to_file(dl.url, dest)
             downloaded.append(dest)
         return downloaded
 
@@ -343,18 +350,11 @@ class AsyncIonForge:
         description: str | None = None,
     ) -> GeometryMeta:
         """Upload a geometry from a builder or serialised model."""
-        from ionforge.geometry.builder import Geometry as _Geometry
-
-        sg = (
-            geometry.to_serialized_geometry()
-            if isinstance(geometry, _Geometry)
-            else geometry
-        )
         return await self.geometries.create(
             project_id=project_id,
             name=name,
             description=description,
-            geometry_data=sg,
+            geometry_data=_as_serialized_geometry(geometry),
         )
 
     async def run_simulation(
@@ -431,32 +431,36 @@ class AsyncIonForge:
         run_id: str,
         *,
         output_dir: str | Path = ".",
+        concurrency: int = 8,
     ) -> list[Path]:
         """Download all result files for a completed run.
 
-        Writes each result file to *output_dir* and returns their paths. Parse a
-        downloaded file into numpy arrays and pandas frames with
-        :func:`ionforge.client.load_result`, or use :meth:`load_results` to
-        download and parse in one call.
-        """
-        import httpx
+        Writes each result file to *output_dir* and returns their paths, in the
+        run's result order. Parse a downloaded file into numpy arrays and pandas
+        frames with :func:`ionforge.client.load_result`, or use
+        :meth:`load_results` to download and parse in one call.
 
+        Files stream concurrently (at most *concurrency* at once) through the
+        transport's dedicated download client, so presigned URLs get the
+        configured timeout, redirect following, retries, and the typed exception
+        hierarchy, and never receive the API credential.
+        """
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        downloaded: list[Path] = []
-        async with httpx.AsyncClient() as client:
-            async for result in self.runs.results(run_id).list_autopaginate():
-                dl = await self.runs.results(run_id).download(result.id)
-                filename = f"result-{result.id}"
-                dest = output_path / filename
-                async with client.stream("GET", dl.url) as response:
-                    response.raise_for_status()
-                    with open(dest, "wb") as f:
-                        async for chunk in response.aiter_bytes():
-                            f.write(chunk)
-                downloaded.append(dest)
-        return downloaded
+        jobs: list[tuple[Path, str]] = []
+        async for result in self.runs.results(run_id).list_autopaginate():
+            dl = await self.runs.results(run_id).download(result.id)
+            jobs.append((output_path / f"result-{result.id}", dl.url))
+
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def _stream(dest: Path, url: str) -> Path:
+            async with semaphore:
+                await self._transport.stream_to_file(url, dest)
+            return dest
+
+        return list(await asyncio.gather(*(_stream(dest, url) for dest, url in jobs)))
 
     async def load_results(
         self,

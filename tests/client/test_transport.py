@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 
@@ -268,6 +270,99 @@ def test_non_json_error_body_falls_back_to_text() -> None:
         client.projects.get("proj_1")
     # No JSON body to read a message from, so the raw text is used.
     assert info.value.message == "<html>oops"
+
+
+def test_post_retried_on_pool_timeout(_no_sleep: list[float]) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        raise httpx.PoolTimeout("pool exhausted")
+
+    max_retries = 2
+    client = make_client(
+        Router().add("POST", r"/v1/projects", handler),
+        max_retries=max_retries,
+    )
+    with pytest.raises(ConnectionError):
+        client.projects.create(name="P")
+    # No connection was ever acquired, so the POST never left the client and is
+    # safe to retry despite being a mutating method.
+    assert calls["n"] == max_retries + 1
+    assert len(_no_sleep) == max_retries
+
+
+# --- presigned streaming (SyncTransport.stream_to_file) --------------------
+
+
+def test_stream_to_file_follows_redirect(tmp_path: Path) -> None:
+    router = (
+        Router()
+        .add(
+            "GET",
+            r"/presigned",
+            lambda _r: httpx.Response(
+                307, headers={"location": "https://storage.example.com/blob"}
+            ),
+        )
+        .add("GET", r"/blob", lambda _r: httpx.Response(200, content=b"payload"))
+    )
+    client = make_client(router)
+    dest = tmp_path / "f"
+    client._transport.stream_to_file("https://files.example.com/presigned", dest)
+    # Presigned links 307 to storage; a bare httpx.stream (follow_redirects off)
+    # would fail here, but the transport client follows the redirect.
+    assert dest.read_bytes() == b"payload"
+
+
+def test_stream_to_file_maps_terminal_status_to_typed_exception(
+    tmp_path: Path,
+) -> None:
+    router = Router().add(
+        "GET", r"/missing", lambda _r: httpx.Response(404, json={"message": "gone"})
+    )
+    client = make_client(router, max_retries=0)
+    with pytest.raises(NotFoundError):
+        client._transport.stream_to_file(
+            "https://files.example.com/missing", tmp_path / "f"
+        )
+
+
+def test_stream_to_file_sends_no_authorization_header(tmp_path: Path) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(200, content=b"x")
+
+    client = make_client(Router().add("GET", r"/f", handler), api_key="ifk_secret")
+    client._transport.stream_to_file("https://files.example.com/f", tmp_path / "f")
+    # The API credential must never be forwarded to a third-party storage host.
+    assert "authorization" not in {k.lower() for k in seen[0].headers}
+    assert seen[0].headers["user-agent"] == transport_mod._USER_AGENT
+
+
+def test_stream_client_uses_configured_timeout() -> None:
+    client = make_client(Router(), timeout=12.5)
+    # The download client inherits the client timeout, not httpx's 5s default.
+    assert client._transport._stream_client.timeout.read == 12.5
+    assert client._transport._stream_client.timeout.connect == 12.5
+
+
+def test_stream_to_file_retries_on_503(_no_sleep: list[float], tmp_path: Path) -> None:
+    calls = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503, json={"message": "down"})
+        return httpx.Response(200, content=b"ok")
+
+    client = make_client(Router().add("GET", r"/f", handler))
+    dest = tmp_path / "f"
+    client._transport.stream_to_file("https://files.example.com/f", dest)
+    assert calls["n"] == 2
+    assert dest.read_bytes() == b"ok"
 
 
 def test_non_numeric_retry_after_is_ignored(_no_sleep: list[float]) -> None:

@@ -449,36 +449,20 @@ def test_to_dataframe_raises_helpful_error_without_pandas(
 _PRESIGNED_URL = "https://files.example.com/results/res_1?sig=opaque"
 
 
-def _download_router() -> Router:
+def _download_router(body: dict[str, object]) -> Router:
+    def presigned(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=json.dumps(body).encode("utf-8"))
+
     return (
         Router()
         .json("GET", r"/v1/runs/run_1/results", page([make_result(id="res_1")]))
         .json("GET", r"/v1/runs/run_1/results/res_1/download", {"url": _PRESIGNED_URL})
+        .add("GET", r"/results/res_1", presigned)
     )
 
 
-def _presigned_file_handler(body: dict[str, object]):
-    def handler(_req: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=json.dumps(body).encode("utf-8"))
-
-    return handler
-
-
-def test_load_results_sync_download_and_parse(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from contextlib import contextmanager
-
-    mock = httpx.MockTransport(_presigned_file_handler(_summary()))
-
-    @contextmanager
-    def fake_stream(method: str, url: str, **kwargs: object):
-        with httpx.Client(transport=mock) as c, c.stream(method, url, **kwargs) as r:
-            yield r
-
-    monkeypatch.setattr(httpx, "stream", fake_stream)
-
-    client = make_client(_download_router())
+def test_load_results_sync_download_and_parse(tmp_path: Path) -> None:
+    client = make_client(_download_router(_summary()))
     results = client.load_results("run_1", output_dir=tmp_path)
 
     assert len(results) == 1
@@ -487,19 +471,9 @@ def test_load_results_sync_download_and_parse(
     assert results[0].exit_energies.shape == (7,)
 
 
-def test_load_results_async_download_and_parse(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    mock = httpx.MockTransport(_presigned_file_handler(_summary()))
-
+def test_load_results_async_download_and_parse(tmp_path: Path) -> None:
     async def go() -> list[RunResultData]:
-        client = make_async_client(_download_router())
-        real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx,
-            "AsyncClient",
-            lambda **kw: real_async_client(transport=mock, **kw),
-        )
+        client = make_async_client(_download_router(_summary()))
         results = await client.load_results("run_1", output_dir=tmp_path)
         await client.close()
         return results

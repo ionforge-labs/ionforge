@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -60,6 +61,16 @@ def _build_headers(config: ClientConfig) -> dict[str, str]:
     return headers
 
 
+def _stream_headers() -> dict[str, str]:
+    """Headers for the presigned-download client.
+
+    Deliberately carries no ``Authorization`` (or ``X-Org-Id``): presigned URLs
+    are cross-host storage links, and forwarding the API credential to a third
+    party would leak it. Only the User-Agent is sent for observability.
+    """
+    return {"User-Agent": _USER_AGENT}
+
+
 def _raise_for_status(response: httpx.Response) -> None:
     """Map an unsuccessful HTTP response to a typed exception."""
     if response.is_success:
@@ -105,13 +116,15 @@ def _should_retry_transport_error(
     """Decide whether a transport-level (network) error is safe to retry.
 
     Connection-phase errors mean the request never reached the server, so they
-    are safe to retry for any method. Errors that surface after the request may
-    already be in flight (read timeouts, protocol errors) are only retried for
-    idempotent methods, so a POST is never silently re-sent.
+    are safe to retry for any method. A ``PoolTimeout`` means no connection was
+    ever acquired from the pool, so the request likewise never left the client
+    and is safe to retry regardless of method. Errors that surface after the
+    request may already be in flight (read timeouts, protocol errors) are only
+    retried for idempotent methods, so a POST is never silently re-sent.
     """
     if attempt >= max_retries:
         return False
-    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)):
         return True
     return method in _RETRYABLE_METHODS
 
@@ -143,6 +156,16 @@ class SyncTransport:
             base_url=config.base_url.rstrip("/") + "/v1",
             headers=_build_headers(config),
             timeout=config.timeout,
+            transport=http_transport,
+        )
+        # Dedicated, unauthenticated client for cross-host presigned downloads.
+        # It shares the configured timeout and the injected transport seam, but
+        # carries no auth header and follows redirects (presigned links 307 to
+        # storage), unlike a bare ``httpx.stream`` with its 5s default timeout.
+        self._stream_client = httpx.Client(
+            headers=_stream_headers(),
+            timeout=config.timeout,
+            follow_redirects=True,
             transport=http_transport,
         )
 
@@ -184,7 +207,47 @@ class SyncTransport:
                 return None
             return response.json()
 
+    def stream_to_file(self, url: str, dest: Path) -> None:
+        """Stream *url* to *dest* through the unauthenticated download client.
+
+        A GET is idempotent, so the same retry policy as :meth:`request` applies:
+        retryable statuses and connection errors back off and retry, and any
+        terminal failure is mapped to the typed exception hierarchy. Redirects
+        are followed and the configured timeout is honoured.
+        """
+        attempt = 0
+        while True:
+            try:
+                with self._stream_client.stream("GET", url) as response:
+                    if _should_retry(
+                        "GET",
+                        response.status_code,
+                        attempt,
+                        self._config.max_retries,
+                    ):
+                        time.sleep(
+                            _backoff_delay(attempt, _retry_after_for_status(response))
+                        )
+                        attempt += 1
+                        continue
+                    if not response.is_success:
+                        response.read()
+                        _raise_for_status(response)
+                    with open(dest, "wb") as f:
+                        for chunk in response.iter_bytes():
+                            f.write(chunk)
+                return
+            except httpx.HTTPError as exc:
+                if _should_retry_transport_error(
+                    "GET", exc, attempt, self._config.max_retries
+                ):
+                    time.sleep(_backoff_delay(attempt, None))
+                    attempt += 1
+                    continue
+                raise ConnectionError(str(exc)) from exc
+
     def close(self) -> None:
+        self._stream_client.close()
         self._client.close()
 
 
@@ -202,6 +265,15 @@ class AsyncTransport:
             base_url=config.base_url.rstrip("/") + "/v1",
             headers=_build_headers(config),
             timeout=config.timeout,
+            transport=http_transport,
+        )
+        # See ``SyncTransport``: an unauthenticated, redirect-following client
+        # for cross-host presigned downloads, sharing the configured timeout and
+        # injected transport seam.
+        self._stream_client = httpx.AsyncClient(
+            headers=_stream_headers(),
+            timeout=config.timeout,
+            follow_redirects=True,
             transport=http_transport,
         )
 
@@ -247,5 +319,44 @@ class AsyncTransport:
                 return None
             return response.json()
 
+    async def stream_to_file(self, url: str, dest: Path) -> None:
+        """Stream *url* to *dest* through the unauthenticated download client.
+
+        The async counterpart of :meth:`SyncTransport.stream_to_file`: same
+        idempotent-GET retry policy, redirect following, configured timeout, and
+        typed-exception mapping. Callers bound concurrency across many of these.
+        """
+        attempt = 0
+        while True:
+            try:
+                async with self._stream_client.stream("GET", url) as response:
+                    if _should_retry(
+                        "GET",
+                        response.status_code,
+                        attempt,
+                        self._config.max_retries,
+                    ):
+                        await asyncio.sleep(
+                            _backoff_delay(attempt, _retry_after_for_status(response))
+                        )
+                        attempt += 1
+                        continue
+                    if not response.is_success:
+                        await response.aread()
+                        _raise_for_status(response)
+                    with open(dest, "wb") as f:
+                        async for chunk in response.aiter_bytes():
+                            f.write(chunk)
+                return
+            except httpx.HTTPError as exc:
+                if _should_retry_transport_error(
+                    "GET", exc, attempt, self._config.max_retries
+                ):
+                    await asyncio.sleep(_backoff_delay(attempt, None))
+                    attempt += 1
+                    continue
+                raise ConnectionError(str(exc)) from exc
+
     async def close(self) -> None:
+        await self._stream_client.aclose()
         await self._client.aclose()
