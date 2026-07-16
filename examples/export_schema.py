@@ -1,10 +1,9 @@
 """Generate the JSON Schema for SerializedGeometry.
 
-This schema can be fed into json-schema-to-zod to generate TypeScript types
-that stay in sync with the Python models:
+Emits a standard JSON Schema straight from the Pydantic model - useful for
+validation or for generating types in other languages:
 
-    python examples/export_schema.py > geometry-schema.json
-    npx json-schema-to-zod -i geometry-schema.json -o geometry.generated.ts
+    uv run python examples/export_schema.py > geometry-schema.json
 """
 
 import json

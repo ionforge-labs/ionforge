@@ -2,7 +2,7 @@
 
 Open-source charged particle optics toolkit.
 
-The SDK provides parametric geometry primitives for building simulation meshes, Pydantic v2 serialization models, STL mesh import/export with quality metrics, and JSON Schema generation for TypeScript codegen.
+The SDK provides parametric geometry primitives for building simulation meshes, Pydantic v2 serialization models, STL mesh import/export with quality metrics, and a client for the IonForge cloud API.
 
 ## Installation
 
@@ -79,9 +79,9 @@ triangles = load_stl("model.stl", scale_factor=1e-3)
 stats = mesh_stats(triangles, verbose=True)
 # Mesh statistics:
 #   Triangles: 2  (0 degenerate, 2 valid)
-#   Total area: 500.00 mm²
-#   Edge range: 0.707 – 1.000 mm
-#   Aspect ratio: mean=1.41  max=1.41
+#   Total area: 1.00 mm²
+#   Edge range: 1.000 – 1.414 mm
+#   Aspect ratio: mean=2.00  max=2.00
 
 # Export as binary STL
 write_stl("output.stl", triangles, name="my_mesh")
@@ -170,19 +170,21 @@ See [`examples/json_round_trip.py`](examples/json_round_trip.py) for the full ru
 
 ### JSON Schema generation
 
-Generate a JSON Schema from the Pydantic models, useful for TypeScript codegen with tools like `json-schema-to-zod`:
+Every serialization model is a Pydantic model, so you can emit a standard JSON Schema straight from it - handy for validation or for generating types in other languages:
 
-```bash
-python -m ionforge.geometry.export_schema > geometry-schema.json
+```python
+import json
+from ionforge.geometry import SerializedGeometry
+
+schema = SerializedGeometry.model_json_schema()
+print(json.dumps(schema, indent=2))
 ```
 
-Then generate TypeScript types:
+See [`examples/export_schema.py`](examples/export_schema.py) for a runnable version that writes the schema to stdout:
 
 ```bash
-npx json-schema-to-zod -i geometry-schema.json -o geometry.generated.ts
+uv run python examples/export_schema.py > geometry-schema.json
 ```
-
-See [`examples/export_schema.py`](examples/export_schema.py) for the programmatic version.
 
 ### Low-level model API
 
@@ -216,6 +218,45 @@ geo = SerializedGeometry(
 
 errors = geo.validate_consistency()  # [] if valid
 ```
+
+## API client
+
+The SDK ships an optional client for the IonForge cloud API. Install it with the `client` extra:
+
+```bash
+uv add "ionforge[client]"
+```
+
+Authenticate with an API key. The client reads `IONFORGE_API_KEY` from the environment (or pass `api_key=` explicitly), and an optional `IONFORGE_BASE_URL` overrides the API endpoint:
+
+```bash
+export IONFORGE_API_KEY="ifk_..."
+```
+
+The workflow is geometry -> model -> run. Build a geometry locally, upload it, launch a simulation run, and pull down the results:
+
+```python
+from ionforge.client import IonForge
+from ionforge.geometry import Geometry, Cylinder
+
+with IonForge() as client:  # reads IONFORGE_API_KEY
+    project = client.projects.create(name="Einzel lens study")
+
+    geo = Geometry(bounding_box=(0.1, 0.1, 0.2))
+    geo.add(Cylinder(r=0.01, length=0.05, voltage=100, name="tube"))
+    geometry = client.upload_geometry(project.id, "lens-v1", geo)
+
+    # Creates a model, launches a run, and waits for it to finish
+    run = client.run_simulation(
+        project_id=project.id,
+        name="baseline",
+        geometry_id=geometry.id,
+    )
+
+    paths = client.download_results(run.id, output_dir="results/")
+```
+
+An `AsyncIonForge` client with the same surface is available for asyncio code.
 
 ## Development
 
