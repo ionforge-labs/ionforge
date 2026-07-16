@@ -395,6 +395,32 @@ class AsyncIonForge:
             )
         return sweep
 
+    async def download_results(
+        self,
+        run_id: str,
+        *,
+        output_dir: str | Path = ".",
+    ) -> list[Path]:
+        """Download all result files for a completed run."""
+        import httpx
+
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        downloaded: list[Path] = []
+        async with httpx.AsyncClient() as client:
+            async for result in self.runs.results(run_id).list_autopaginate():
+                dl = await self.runs.results(run_id).download(result.id)
+                filename = f"result-{result.id}"
+                dest = output_path / filename
+                async with client.stream("GET", dl.url) as response:
+                    response.raise_for_status()
+                    with open(dest, "wb") as f:
+                        async for chunk in response.aiter_bytes():
+                            f.write(chunk)
+                downloaded.append(dest)
+        return downloaded
+
     # -- Context manager ----------------------------------------------------
 
     async def close(self) -> None:
