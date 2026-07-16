@@ -28,11 +28,16 @@ stored in the repo).
 
 Publishing the Release triggers `.github/workflows/release.yml`, which:
 
-- runs lint, typecheck, and the full test suite,
+- runs lint, `ruff format --check`, typecheck, and the full test suite,
 - verifies the release tag matches the version in `pyproject.toml`
-  (the build fails loudly on a mismatch),
+  (tag and version are normalized with `packaging.version` so the check
+  is PEP 440-aware, and the build fails loudly on a mismatch),
 - builds the sdist and wheel with `uv build`, and
 - publishes to PyPI through the `pypi` environment.
+
+Publishing uses `skip-existing`, so re-firing a release event (or replaying a
+run) is idempotent: any distribution already present on PyPI is left untouched
+instead of failing the job on a 409.
 
 To validate the build without publishing, trigger the workflow manually
 (`workflow_dispatch`) from the Actions tab. Manual runs build and test only;
