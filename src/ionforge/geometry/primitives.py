@@ -19,10 +19,10 @@ def _ring(
     z: float,
     n: int,
     offset: float = 0.0,
-) -> list[tuple[float, float, float]]:
+) -> list[list[float]]:
     """Generate n points on a circle at height z."""
     angles = np.linspace(0, 2 * np.pi, n, endpoint=False) + offset
-    return [(float(radius * np.cos(a)), float(radius * np.sin(a)), z) for a in angles]
+    return [[float(radius * np.cos(a)), float(radius * np.sin(a)), z] for a in angles]
 
 
 @dataclass
@@ -300,7 +300,7 @@ class Cone:
             tip_z = z_offset
 
         ring_pts = _ring(ring_r, ring_z, n)
-        tip_pos = (0.0, 0.0, tip_z)
+        tip_pos = [0.0, 0.0, tip_z]
 
         vertices = [Vertex(id=f"{prefix}_tip", position=tip_pos)]
         for i, pt in enumerate(ring_pts):
@@ -375,7 +375,7 @@ class Sphere:
 
         # South pole
         south_id = f"{prefix}_south"
-        vertices.append(Vertex(id=south_id, position=(0.0, 0.0, cz - r)))
+        vertices.append(Vertex(id=south_id, position=[0.0, 0.0, cz - r]))
 
         # Latitude rings (excluding poles)
         for ring_i in range(1, n_ring):
@@ -388,11 +388,11 @@ class Sphere:
                 y = float(ring_r * np.sin(theta))
                 vid = f"{prefix}_v{ring_i}_{seg_j}"
                 v_id_map[(ring_i, seg_j)] = vid
-                vertices.append(Vertex(id=vid, position=(x, y, float(ring_z))))
+                vertices.append(Vertex(id=vid, position=[x, y, float(ring_z)]))
 
         # North pole
         north_id = f"{prefix}_north"
-        vertices.append(Vertex(id=north_id, position=(0.0, 0.0, cz + r)))
+        vertices.append(Vertex(id=north_id, position=[0.0, 0.0, cz + r]))
 
         edges: list[Edge] = []
         faces: list[Face] = []

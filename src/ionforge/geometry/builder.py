@@ -42,7 +42,7 @@ class Geometry:
         symmetry: Symmetry | str = "none",
     ) -> None:
         self._bounding_box = BoundingBox(
-            size=bounding_box, voltage=bounding_box_voltage
+            size=list(bounding_box), voltage=bounding_box_voltage
         )
         self._symmetry = Symmetry(symmetry)
         self._groups: list[_PendingGroup] = []

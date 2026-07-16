@@ -17,6 +17,7 @@ from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from .._transport import AsyncTransport, SyncTransport
 from ._base import BaseAsyncResource, BaseSyncResource
+from ._coerce import to_enum, to_model
 
 if TYPE_CHECKING:
     from .results import AsyncRunResults, RunResults
@@ -62,8 +63,8 @@ class ModelRuns(BaseSyncResource):
             self._base_path(),
             body=CreateModelRunRequest(
                 name=name,
-                params=params,
-                kind=kind,
+                params=to_model(ModelParams, params),
+                kind=to_enum(Kind, kind),
                 parent_run_id=parent_run_id,
             ),
         )
@@ -121,8 +122,8 @@ class AsyncModelRuns(BaseAsyncResource):
             self._base_path(),
             body=CreateModelRunRequest(
                 name=name,
-                params=params,
-                kind=kind,
+                params=to_model(ModelParams, params),
+                kind=to_enum(Kind, kind),
                 parent_run_id=parent_run_id,
             ),
         )

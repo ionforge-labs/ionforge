@@ -116,7 +116,7 @@ def prepare_mesh(
     # Face id → group mapping
     fid_to_group: dict[str, int] = {}
     for gi, group in enumerate(sg.groups):
-        for fid in group.face_ids:
+        for fid in group.face_ids or []:
             fid_to_group[fid] = gi
 
     # Compute voltage range (only non-None values)
@@ -145,9 +145,10 @@ def prepare_mesh(
         for i, g in enumerate(sg.groups)
     ]
 
+    bb = sg.bounding_box.size
     return PreparedMesh(
         positions=positions,
         faces=face_data,
         groups=groups_info,
-        bounding_box_size=sg.bounding_box.size,
+        bounding_box_size=(float(bb[0]), float(bb[1]), float(bb[2])),
     )

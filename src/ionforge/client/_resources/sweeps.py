@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from pydantic import TypeAdapter
+
 from ionforge._types._generated import (
     Axes,
     Axes1,
@@ -21,6 +23,7 @@ from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from .._transport import AsyncTransport, SyncTransport
 from ._base import BaseAsyncResource, BaseSyncResource
+from ._coerce import to_enum, to_list
 
 # Public, readable aliases for the codegen axis models. A sweep axis varies
 # either a model parameter (``ParamAxis``) or a geometry parameter
@@ -32,6 +35,10 @@ GeometryAxis = Axes1
 
 # An axis is a ``ParamAxis``- or ``GeometryAxis``-valued dimension of the sweep.
 SweepAxis = ParamAxis | GeometryAxis | dict[str, Any]
+
+# Validates a list of axes (given as models or plain dicts) into the strict
+# ``list[Axes | Axes1]`` the request model requires.
+_AXES_ADAPTER: TypeAdapter[list[Axes | Axes1]] = TypeAdapter(list[Axes | Axes1])
 
 
 # ---------------------------------------------------------------------------
@@ -65,11 +72,11 @@ class ModelSweeps(BaseSyncResource):
             self._base_path(),
             body=CreateModelSweepRequest(
                 name=name,
-                axes=axes,
-                strategy=strategy,
+                axes=to_list(_AXES_ADAPTER, axes),
+                strategy=to_enum(Strategy, strategy),
                 random_count=random_count,
-                objective_metric=objective_metric,
-                objective_direction=objective_direction,
+                objective_metric=to_enum(ObjectiveMetric, objective_metric),
+                objective_direction=to_enum(ObjectiveDirection, objective_direction),
                 parent_sweep_id=parent_sweep_id,
             ),
         )
@@ -102,11 +109,11 @@ class AsyncModelSweeps(BaseAsyncResource):
             self._base_path(),
             body=CreateModelSweepRequest(
                 name=name,
-                axes=axes,
-                strategy=strategy,
+                axes=to_list(_AXES_ADAPTER, axes),
+                strategy=to_enum(Strategy, strategy),
                 random_count=random_count,
-                objective_metric=objective_metric,
-                objective_direction=objective_direction,
+                objective_metric=to_enum(ObjectiveMetric, objective_metric),
+                objective_direction=to_enum(ObjectiveDirection, objective_direction),
                 parent_sweep_id=parent_sweep_id,
             ),
         )

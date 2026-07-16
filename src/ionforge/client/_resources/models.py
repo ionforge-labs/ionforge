@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Iterator
 from typing import Any
 
@@ -18,6 +19,7 @@ from ionforge._types._generated import (
 from .._models.pagination import Page
 from .._pagination import AsyncPageIterator, PageIterator
 from ._base import BaseAsyncResource, BaseSyncResource
+from ._coerce import to_enum, to_model
 from .runs import AsyncModelRuns, ModelRuns
 from .sweeps import AsyncModelSweeps, ModelSweeps
 
@@ -61,9 +63,9 @@ class Models(BaseSyncResource):
                 project_id=project_id,
                 name=name,
                 description=description,
-                simulator_type=simulator_type,
+                simulator_type=to_enum(SimulatorType, simulator_type),
                 geometry_id=geometry_id,
-                params=params,
+                params=to_model(ModelParams, params),
                 is_template=is_template,
             ),
         )
@@ -132,7 +134,7 @@ class Models(BaseSyncResource):
                 name=name,
                 description=description,
                 geometry_id=geometry_id,
-                params=params,
+                params=to_model(ModelParams, params),
             ),
         )
         return Model.model_validate(data)
@@ -146,7 +148,7 @@ class Models(BaseSyncResource):
         *,
         search: str | None = None,
         limit: int = 25,
-    ) -> list[Model]:
+    ) -> builtins.list[Model]:
         """List template models."""
         params: dict[str, object] = {"limit": limit}
         if search is not None:
@@ -205,9 +207,9 @@ class AsyncModels(BaseAsyncResource):
                 project_id=project_id,
                 name=name,
                 description=description,
-                simulator_type=simulator_type,
+                simulator_type=to_enum(SimulatorType, simulator_type),
                 geometry_id=geometry_id,
-                params=params,
+                params=to_model(ModelParams, params),
                 is_template=is_template,
             ),
         )
@@ -276,7 +278,7 @@ class AsyncModels(BaseAsyncResource):
                 name=name,
                 description=description,
                 geometry_id=geometry_id,
-                params=params,
+                params=to_model(ModelParams, params),
             ),
         )
         return Model.model_validate(data)
@@ -290,7 +292,7 @@ class AsyncModels(BaseAsyncResource):
         *,
         search: str | None = None,
         limit: int = 25,
-    ) -> list[Model]:
+    ) -> builtins.list[Model]:
         """List template models."""
         params: dict[str, object] = {"limit": limit}
         if search is not None:
